@@ -1,5 +1,7 @@
 # toAI
 
+English | [中文](README.zh-CN.md)
+
 Repository for a local AI chat application built with Next.js, React, TypeScript,
 Tailwind CSS, and Electron.
 

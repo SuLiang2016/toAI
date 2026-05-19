@@ -1,5 +1,7 @@
 # toAI
 
+[English](README.md) | 中文
+
 这是一个本地 AI 聊天应用仓库，前端与桌面端基于 Next.js、React、
 TypeScript、Tailwind CSS 和 Electron 构建。
 
