@@ -44,6 +44,21 @@ export interface ProviderSettings {
   supportsAttachments?: boolean;
 }
 
+export interface ProviderPreset extends ProviderSettings {
+  id: string;
+  name: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface PromptTemplate {
+  id: string;
+  title: string;
+  content: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface ChatRequest {
   messages: ChatRequestMessage[];
   settings?: ProviderSettings;

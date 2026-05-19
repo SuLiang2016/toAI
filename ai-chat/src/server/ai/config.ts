@@ -57,5 +57,8 @@ export function sanitizeProviderMessage(message: unknown): string {
 
   return message
     .replace(/sk-[A-Za-z0-9_-]+/g, 'sk-***')
-    .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, 'Bearer ***');
+    .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, 'Bearer ***')
+    .replace(/(["']?(?:api[_-]?key|token|secret|password)["']?\s*[:=]\s*["']?)[^"',}\s]+(["']?)/gi, '$1***$2')
+    .replace(/[A-Za-z]:\\[^\s"'<>]+/g, '[local path]')
+    .replace(/\/(?:Users|home|var|tmp|etc)\/[^\s"'<>]+/g, '[local path]');
 }
