@@ -1,5 +1,6 @@
 'use client';
 
+/* eslint-disable @next/next/no-img-element */
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Message } from '@/types/chat';
@@ -16,7 +17,7 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
       className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4 animate-fade-in`}
     >
       <div
-        className={`max-w-[70%] rounded-2xl px-4 py-2 ${
+        className={`max-w-[min(70%,calc(100vw-2rem))] overflow-hidden rounded-2xl px-4 py-2 ${
           isUser
             ? 'bg-blue-500 text-white rounded-br-md'
             : 'bg-gray-100 text-gray-900 rounded-bl-md'
@@ -51,7 +52,7 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
         {isUser ? (
           <p className="whitespace-pre-wrap break-words">{message.content}</p>
         ) : (
-          <div className="markdown-body prose prose-sm max-w-none dark:prose-invert">
+          <div className="markdown-body prose prose-sm max-w-none overflow-hidden dark:prose-invert">
             <ReactMarkdown remarkPlugins={[remarkGfm]}>
               {message.content}
             </ReactMarkdown>

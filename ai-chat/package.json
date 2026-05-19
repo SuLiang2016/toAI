@@ -8,8 +8,11 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "electron-dev": "concurrently \"npm run dev\" \"wait-on http://localhost:3000 && cross-env NODE_ENV=development electron .\"",
-    "electron-build": "next build && electron-builder",
+    "typecheck": "tsc --noEmit",
+    "test": "node scripts/verify-upgrade.mjs",
+    "electron-dev": "concurrently \"pnpm dev\" \"wait-on http://localhost:3000 && cross-env NODE_ENV=development electron .\"",
+    "electron-build": "pnpm build && electron-builder --win dir",
+    "electron-installer": "pnpm build && electron-builder",
     "electron-start": "cross-env NODE_ENV=production electron ."
   },
   "dependencies": {
@@ -38,16 +41,23 @@
   "build": {
     "appId": "com.aichat.app",
     "productName": "AI Chat",
+    "executableName": "AI Chat",
+    "electronVersion": "41.2.0",
+    "electronDist": "node_modules/.pnpm/electron@41.2.0/node_modules/electron/dist",
     "directories": {
       "output": "dist"
     },
     "files": [
       "electron/**/*",
-      "out/**/*"
+      ".next/**/*",
+      "public/**/*",
+      "next.config.*",
+      "package.json"
     ],
     "win": {
       "target": ["nsis"],
-      "icon": "electron/icon.ico"
+      "icon": "electron/icon.ico",
+      "signAndEditExecutable": false
     },
     "mac": {
       "target": ["dmg"],

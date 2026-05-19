@@ -1,13 +1,13 @@
 # AI 对话框应用
 
-基于 Next.js + Electron 构建的桌面 AI 聊天应用，支持流式对话、Markdown 渲染和文件上传。
+基于 Next.js + Electron 构建的桌面 AI 聊天应用，支持流式对话、Markdown 渲染、会话持久化和附件协议。
 
 ## 功能特性
 
 - ✅ 流式对话（逐字显示 AI 回复）
 - ✅ 对话历史管理（localStorage 持久化）
 - ✅ Markdown 渲染（支持代码块、表格等）
-- ✅ 文件/图片上传
+- ✅ 图片附件协议（默认关闭，模型支持时可启用）
 - ✅ 多轮对话上下文
 - ✅ 桌面应用（Electron 打包）
 
@@ -34,6 +34,7 @@ cp .env.example .env.local
 | `AI_API_KEY` | API 密钥（必填） | 无 |
 | `AI_API_BASE_URL` | API 基础地址 | `https://api.openai.com/v1` |
 | `AI_MODEL` | 模型名称 | `gpt-3.5-turbo` |
+| `AI_SUPPORTS_ATTACHMENTS` | 是否启用图片附件直传协议 | `false` |
 
 **常见配置示例：**
 
@@ -42,11 +43,13 @@ cp .env.example .env.local
 AI_API_KEY=sk-xxx
 AI_API_BASE_URL=https://api.openai.com/v1
 AI_MODEL=gpt-4
+AI_SUPPORTS_ATTACHMENTS=false
 
 # 兼容 OpenAI 格式的第三方 API（如 Azure、本地部署等）
 AI_API_KEY=your-key
 AI_API_BASE_URL=https://your-custom-api.com/v1
 AI_MODEL=your-model-name
+AI_SUPPORTS_ATTACHMENTS=false
 ```
 
 ### 3. 运行开发模式
@@ -62,13 +65,34 @@ pnpm dev
 pnpm electron-dev
 ```
 
-### 4. 构建桌面应用
+如果 Electron 下载或打包阶段访问 GitHub 失败，优先确认
+`node_modules/.pnpm/electron@41.2.0/node_modules/electron/path.txt`
+存在；当前打包配置会复用本地 Electron 分发目录，必要时再配置
+`ELECTRON_MIRROR` 或公司内网镜像。
+
+### 4. 验证
+
+```bash
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm build
+```
+
+`pnpm test` 使用仓库内的无新增依赖验证脚本，覆盖升级清单中的脚本、会话、API/provider、附件协议和 Electron 安全边界检查。
+
+### 5. 构建桌面应用
 
 ```bash
 pnpm electron-build
 ```
 
-构建完成后，可执行文件位于 `dist/` 目录。
+构建完成后，未打包目录位于 `dist/win-unpacked/`，可执行文件为
+`dist/win-unpacked/AI Chat.exe`。生成安装器使用：
+
+```bash
+pnpm electron-installer
+```
 
 ## 项目结构
 
@@ -96,21 +120,22 @@ ai-chat/
 
 ## 自定义 AI API
 
-如果你想使用其他 AI 服务（如 Claude、文心一言等），编辑 `src/app/api/chat/route.ts`：
+兼容 OpenAI 的 provider 逻辑位于 `src/server/ai/`：
 
-```typescript
-// 修改为你的 API 端点
-const response = await fetch('YOUR_AI_API_URL', {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${YOUR_API_KEY}`,
-  },
-  body: JSON.stringify({
-    // 根据你的 API 要求调整参数
-  }),
-});
-```
+- `config.ts` 负责读取和校验 `AI_API_KEY`、`AI_API_BASE_URL`、`AI_MODEL`。
+- `openai-compatible.ts` 负责上游 `/chat/completions` 调用、SSE 转发、附件映射和错误标准化。
+- `src/app/api/chat/route.ts` 只处理 HTTP 入参/出参。
+
+模型 base URL、模型名和附件开关也可在应用右上角设置页中编辑；API Key 仍只从 `.env.local` 读取，不在界面中展示或保存。
+
+## 附件协议
+
+默认 `AI_SUPPORTS_ATTACHMENTS=false`。此时带附件的请求会返回明确错误，避免半接入状态。
+当设置为 `true` 时，图片附件会以 OpenAI-compatible 的 `image_url` content part 直传；非图片文件会被拒绝并提示先转为文本摘要。
+
+## 自动更新策略
+
+当前没有发布渠道配置，因此不硬接入自动更新。后续接入时应先确定发布源、签名证书和回滚策略，再启用 electron-builder publish/auto-update 配置。
 
 ## 技术栈
 
