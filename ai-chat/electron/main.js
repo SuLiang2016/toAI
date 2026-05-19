@@ -149,6 +149,15 @@ async function createWindow() {
     show: false,
   });
 
+  mainWindow.once('ready-to-show', () => {
+    mainWindow.show();
+  });
+
+  mainWindow.on('close', saveWindowBounds);
+  mainWindow.on('closed', () => {
+    mainWindow = null;
+  });
+
   try {
     if (isDev) {
       await mainWindow.loadURL('http://localhost:3000');
@@ -160,15 +169,6 @@ async function createWindow() {
     logAppEvent('window-load-failed', { message: error.message });
     throw error;
   }
-
-  mainWindow.once('ready-to-show', () => {
-    mainWindow.show();
-  });
-
-  mainWindow.on('close', saveWindowBounds);
-  mainWindow.on('closed', () => {
-    mainWindow = null;
-  });
 }
 
 app.whenReady().then(() => {
