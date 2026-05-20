@@ -4,6 +4,17 @@ export interface Message {
   content: string;
   timestamp: number;
   attachments?: Attachment[];
+  status?: MessageStatus;
+}
+
+export type MessageStatus = 'complete' | 'streaming' | 'partial' | 'aborted' | 'error';
+
+export type ChatErrorKind = 'abort' | 'incomplete_stream' | 'upstream_error' | 'validation_error' | 'network_error';
+
+export interface ChatErrorState {
+  kind: ChatErrorKind;
+  message: string;
+  recoverable: boolean;
 }
 
 export interface Attachment {
@@ -22,6 +33,7 @@ export interface Conversation {
   messages: Message[];
   createdAt: number;
   updatedAt: number;
+  provider?: ProviderSnapshot;
 }
 
 export interface ChatRequestAttachment {
@@ -42,6 +54,15 @@ export interface ProviderSettings {
   baseUrl?: string;
   model?: string;
   supportsAttachments?: boolean;
+  capabilities?: ProviderCapabilities;
+}
+
+export interface ProviderCapabilities {
+  supportsAttachments: boolean;
+  supportsImages: boolean;
+  maxImageAttachmentBytes: number;
+  maxTextFileBytes: number;
+  streaming: boolean;
 }
 
 export interface ProviderPreset extends ProviderSettings {
@@ -49,6 +70,16 @@ export interface ProviderPreset extends ProviderSettings {
   name: string;
   createdAt: number;
   updatedAt: number;
+}
+
+export interface ProviderSnapshot {
+  id?: string;
+  name: string;
+  baseUrl?: string;
+  model?: string;
+  capabilities: ProviderCapabilities;
+  checkedAt?: number;
+  status?: 'unchecked' | 'reachable' | 'unreachable';
 }
 
 export interface PromptTemplate {

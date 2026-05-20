@@ -8,7 +8,7 @@ export async function POST(request: NextRequest) {
     const body = (await request.json()) as Partial<ChatRequest>;
 
     if (!Array.isArray(body.messages) || body.messages.length === 0) {
-      return NextResponse.json({ error: '请求缺少 messages' }, { status: 400 });
+      return NextResponse.json({ error: 'Request is missing messages' }, { status: 400 });
     }
 
     return createOpenAICompatibleStream({

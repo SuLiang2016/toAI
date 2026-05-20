@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync, existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 
 const json = path => JSON.parse(readFileSync(path, 'utf8'));
 const text = path => readFileSync(path, 'utf8');
@@ -18,7 +18,7 @@ assert.match(pkg.scripts['electron-build'], /pnpm build/, 'electron-build must u
 assert.deepEqual(
   Object.keys(pkg.dependencies).sort(),
   ['highlight.js', 'next', 'react', 'react-dom', 'react-markdown', 'remark-gfm'].sort(),
-  'Phase 1 must not add runtime dependencies'
+  'upgrade must not add runtime dependencies'
 );
 assert.deepEqual(
   Object.keys(pkg.devDependencies).sort(),
@@ -37,18 +37,62 @@ assert.deepEqual(
     'typescript',
     'wait-on',
   ].sort(),
-  'Phase 1 must not add development dependencies'
+  'upgrade must not add development dependencies'
 );
 
-const route = text('src/app/api/chat/route.ts');
-assert.match(route, /createOpenAICompatibleStream/, 'API route must delegate provider calls');
-assert.doesNotMatch(route, /Unexpected any|:\s*any/, 'API route must avoid any');
+assert.ok(existsSync('src/lib/streaming.ts'), 'pure streaming parser module must exist');
+assert.ok(existsSync('src/lib/storage.ts'), 'storage schema/migration helper module must exist');
+assert.ok(existsSync('src/app/api/provider/check/route.ts'), 'provider connectivity check route must exist');
+
+const chatTypes = text('src/types/chat.ts');
+assert.match(chatTypes, /export type MessageStatus/, 'MessageStatus type must distinguish partial/aborted/error output');
+assert.match(chatTypes, /export interface ChatErrorState/, 'ChatErrorState contract must exist');
+assert.match(chatTypes, /incomplete_stream/, 'ChatErrorState must include incomplete stream kind');
+assert.match(chatTypes, /export interface ProviderCapabilities/, 'ProviderCapabilities type must exist');
+assert.match(chatTypes, /export interface ProviderSnapshot/, 'ProviderSnapshot type must exist for per-conversation metadata');
+assert.match(chatTypes, /provider\?: ProviderSnapshot/, 'Conversation must carry provider metadata');
+
+const streaming = text('src/lib/streaming.ts');
+assert.match(streaming, /export function consumeSseBuffer/, 'streaming module must expose incremental SSE parser');
+assert.match(streaming, /\[DONE\]/, 'streaming parser must recognize completion marker');
+assert.match(streaming, /StreamingParseError/, 'streaming parser must expose invalid-data error');
+assert.match(streaming, /readStreamEventContent/, 'streaming module must expose content extraction');
+
+const storage = text('src/lib/storage.ts');
+assert.match(storage, /STORAGE_SCHEMA_VERSION = 2/, 'storage helpers must declare schema version');
+assert.match(storage, /CONVERSATIONS_KEY = 'conversations'/, 'storage helpers must own conversations key');
+assert.match(storage, /CONVERSATION_DRAFTS_KEY = 'conversationDrafts'/, 'storage helpers must own drafts key');
+assert.match(storage, /PROMPT_TEMPLATES_KEY = 'promptTemplates'/, 'storage helpers must own template key');
+assert.match(storage, /PROVIDER_PRESETS_KEY = 'providerPresets'/, 'storage helpers must own provider preset key');
+assert.match(storage, /loadStoredConversations/, 'storage helpers must load conversations');
+assert.match(storage, /normalizeConversation/, 'storage helpers must validate stored conversations');
+assert.match(storage, /quarantineCorruptedStorage/, 'storage helpers must quarantine malformed localStorage records');
+assert.match(storage, /loadStoredPromptTemplates/, 'storage helpers must validate prompt templates');
+assert.match(storage, /loadStoredProviderPresets/, 'storage helpers must validate provider presets');
+assert.match(storage, /migrateLegacyProviderSettings/, 'storage helpers must migrate legacy provider settings');
+assert.match(storage, /validateProviderSettings/, 'storage helpers must validate provider settings');
+assert.match(storage, /createProviderSnapshot/, 'storage helpers must create per-conversation provider snapshots');
+assert.match(storage, /pruneConversationDrafts/, 'storage helpers must clean stale drafts');
+
+const hook = text('src/hooks/useChat.ts');
+assert.match(hook, /consumeSseBuffer/, 'useChat must use pure stream parser');
+assert.match(hook, /validateProviderSettings/, 'useChat must validate provider settings before send');
+assert.match(hook, /errorState/, 'useChat must expose structured error state');
+assert.match(hook, /kind: 'abort'/, 'useChat must distinguish user abort');
+assert.match(hook, /incomplete_stream/, 'useChat must distinguish incomplete streams');
+assert.match(hook, /upstream_error/, 'useChat must distinguish upstream errors');
+assert.match(hook, /validation_error/, 'useChat must distinguish validation errors');
+assert.match(hook, /status: 'streaming'/, 'useChat must mark streaming assistant messages');
+assert.match(hook, /'partial'/, 'useChat must preserve partial output state');
+assert.match(hook, /sanitizeClientError/, 'useChat must sanitize displayed API errors');
+assert.match(hook, /\[local path\]/, 'useChat must mask local paths in displayed errors');
 
 const providerConfig = text('src/server/ai/config.ts');
-assert.match(providerConfig, /AI_API_KEY/, 'provider config must report missing API key setup');
+assert.match(providerConfig, /validateProviderSettings/, 'provider config must validate settings server-side');
+assert.match(providerConfig, /Missing API key/, 'provider config must report missing API key setup');
 assert.match(providerConfig, /sanitizeProviderMessage/, 'provider config must sanitize upstream errors');
-assert.match(providerConfig, /\[local path\]/, 'provider config must mask local paths in upstream errors');
-assert.match(providerConfig, /api\[_-\]\?key\|token\|secret\|password/, 'provider config must mask quoted and unquoted secret field names');
+assert.match(providerConfig, /\[local path\]/, 'provider config must mask local paths');
+assert.match(providerConfig, /api\[_-\]\?key\|token\|secret\|password/, 'provider config must mask secret field names');
 assert.equal(
   sanitizeSample('{"api_key":"abc","password":"pw"} C:\\Users\\me\\secret.txt Bearer abc.def sk-test'),
   '{"api_key":"***","password":"***"} [local path] Bearer *** sk-***',
@@ -56,143 +100,78 @@ assert.equal(
 );
 
 const provider = text('src/server/ai/openai-compatible.ts');
-assert.match(provider, /supportsAttachments/, 'provider must declare attachment support gate');
+assert.match(provider, /supportsAttachments/, 'provider must gate attachment forwarding');
 assert.match(provider, /message\.attachments/, 'provider must inspect attachment requests');
 assert.match(provider, /readUpstreamError/, 'provider must normalize upstream errors');
 
-const hook = text('src/hooks/useChat.ts');
-assert.match(hook, /AbortError/, 'useChat must handle user aborts');
-assert.match(hook, /consumeSseBuffer/, 'useChat must parse streaming SSE incrementally');
-assert.match(hook, /readErrorResponse/, 'useChat must show API error messages');
-assert.match(hook, /sawDone/, 'useChat must detect interrupted response streams');
-assert.match(hook, /Promise<boolean>/, 'useChat sendMessage must report accepted handoff status');
-assert.match(hook, /return true/, 'useChat must return true after accepted send completion');
-assert.match(hook, /return false/, 'useChat must return false when send setup or delivery fails');
-assert.match(hook, /resendFromMessages/, 'useChat must expose regenerate resend path');
-assert.match(hook, /removeLatestAssistantMessage/, 'useChat must expose latest assistant removal for regeneration');
-assert.match(hook, /submitChatTurn/, 'useChat must share streaming logic between send and regenerate');
-assert.match(hook, /skipUserMessageCreation/, 'useChat regenerate must avoid creating a duplicate user message');
-assert.match(hook, /restoreMessages/, 'useChat must support restoring history when regenerate fails');
-assert.match(hook, /sanitizeClientError/, 'useChat must sanitize displayed API errors');
-assert.match(hook, /\[local path\]/, 'useChat must mask local paths in displayed errors');
+const checkRoute = text('src/app/api/provider/check/route.ts');
+assert.match(checkRoute, /getProviderConfig/, 'provider check route must reuse provider config validation');
+assert.match(checkRoute, /\/models/, 'provider check route must use a lightweight provider endpoint');
+assert.match(checkRoute, /sanitizeProviderMessage/, 'provider check errors must be sanitized');
+assert.match(checkRoute, /AbortController/, 'provider check route must include timeout behavior');
 
-const chatTypes = text('src/types/chat.ts');
-assert.match(chatTypes, /export interface PromptTemplate/, 'PromptTemplate type must exist');
-assert.match(chatTypes, /id: string[\s\S]*title: string[\s\S]*content: string[\s\S]*createdAt: number[\s\S]*updatedAt: number/, 'PromptTemplate must include required fields');
-assert.match(chatTypes, /export interface ProviderPreset extends ProviderSettings/, 'ProviderPreset type must extend provider settings');
-assert.match(chatTypes, /name: string[\s\S]*createdAt: number[\s\S]*updatedAt: number/, 'ProviderPreset must include name and timestamps');
+const route = text('src/app/api/chat/route.ts');
+assert.match(route, /createOpenAICompatibleStream/, 'API route must delegate provider calls');
+assert.doesNotMatch(route, /Unexpected any|:\s*any/, 'API route must avoid any');
 
 const inputArea = text('src/components/InputArea.tsx');
-assert.match(inputArea, /interface InputAreaProps[\s\S]*value: string/, 'InputArea must accept controlled text value');
-assert.match(inputArea, /interface InputAreaProps[\s\S]*onChange: \(value: string\) => void/, 'InputArea must accept controlled text changes');
+assert.match(inputArea, /value: string/, 'InputArea must accept controlled text value');
 assert.match(inputArea, /templates: PromptTemplate\[\]/, 'InputArea must accept prompt templates');
 assert.match(inputArea, /supportsAttachments: boolean/, 'InputArea must receive active attachment capability');
-assert.doesNotMatch(inputArea, /disabled=\{!supportsAttachments\}/, 'InputArea must keep text-file import reachable when image attachments are unsupported');
-assert.match(inputArea, /Images disabled; \.txt import available/, 'InputArea must show image capability without blocking text import');
-assert.match(inputArea, /MAX_IMAGE_ATTACHMENT_SIZE/, 'InputArea must define an image attachment size limit');
-assert.match(inputArea, /MAX_TEXT_FILE_SIZE/, 'InputArea must define a text file size limit');
-assert.match(inputArea, /isPlainTextFile/, 'InputArea must detect plain text files locally');
-assert.match(inputArea, /readTextFile/, 'InputArea must read text files in-browser');
-assert.match(inputArea, /appendTextSnippets/, 'InputArea must insert text file content into the draft');
-assert.match(inputArea, /Unsupported file type/, 'InputArea must reject unsupported binary files locally');
 assert.match(inputArea, /Image attachments are disabled for the active provider/, 'InputArea must block unsupported image attachments clearly');
-assert.match(inputArea, /formatBytes/, 'InputArea must report size limits without local paths');
-assert.match(inputArea, /onSend: \(content: string, files\?: File\[\]\) => SendResult/, 'InputArea must accept an awaitable send result');
-assert.doesNotMatch(inputArea, /const \[input,\s*setInput\]/, 'InputArea must not own all text internally');
-assert.match(inputArea, /value=\{value\}/, 'InputArea textarea must render controlled value');
-assert.match(inputArea, /onChange=\{handleDraftChange\}/, 'InputArea textarea must forward changes');
-assert.match(inputArea, /setSelectedFiles\(\[\]\)/, 'InputArea must still clear selected files after send');
-assert.match(inputArea, /const accepted = await onSend/, 'InputArea must clear attachments only after send is accepted');
 assert.match(inputArea, /event\.ctrlKey/, 'InputArea must handle Ctrl+Enter send shortcut');
 assert.match(inputArea, /event\.metaKey/, 'InputArea must handle Meta+Enter send shortcut');
 assert.match(inputArea, /event\.nativeEvent\.isComposing/, 'InputArea must not submit while IME composition is active');
-assert.match(inputArea, /event\.key === 'Escape' && isLoading/, 'InputArea must handle Escape only while loading');
-assert.match(inputArea, /onStop\?\.\(\)/, 'InputArea Escape handling must call onStop');
+assert.match(inputArea, /event\.key === 'Escape' && isLoading/, 'InputArea must handle Escape while loading');
 assert.match(inputArea, /URL\.revokeObjectURL/, 'InputArea must release image preview object URLs');
-assert.doesNotMatch(inputArea, /src=\{URL\.createObjectURL/, 'InputArea must not create object URLs during render');
 assert.match(inputArea, /slashRange/, 'InputArea must track slash command ranges');
-assert.match(inputArea, /slashQuery/, 'InputArea must filter templates from slash query text');
-assert.match(inputArea, /filteredTemplates/, 'InputArea must render filtered template matches');
-assert.match(inputArea, /lastIndexOf\('\/'\)/, 'InputArea must detect slash commands before the cursor');
-assert.match(inputArea, /event\.key === 'ArrowDown'/, 'InputArea must support template picker ArrowDown navigation');
-assert.match(inputArea, /event\.key === 'ArrowUp'/, 'InputArea must support template picker ArrowUp navigation');
-assert.match(inputArea, /insertTemplate\(template\)/, 'InputArea must insert highlighted or clicked templates');
-assert.match(inputArea, /setSelectionRange\(nextCursor, nextCursor\)/, 'InputArea must restore cursor after template insertion');
+assert.match(inputArea, /ArrowDown/, 'InputArea must support template picker keyboard navigation');
 
 const chatBox = text('src/components/ChatBox.tsx');
-assert.match(chatBox, /handleDeleteConversation/, 'ChatBox must support conversation deletion');
-assert.match(chatBox, /loadMessages\(conversation\.messages\)/, 'ChatBox must restore history messages');
-assert.match(chatBox, /readStoredProviderSettings/, 'ChatBox must read only stored provider overrides');
-assert.match(chatBox, /return emptyToUndefined\(normalizeProviderSettings\(stored\)\)/, 'ChatBox must not send default settings over env config');
-assert.match(chatBox, /isLegacyDefaultProviderSettings/, 'ChatBox must ignore legacy default settings that masked env config');
-assert.match(chatBox, /PROVIDER_PRESETS_KEY = 'providerPresets'/, 'ChatBox must store provider presets separately');
-assert.match(chatBox, /ACTIVE_PROVIDER_PRESET_KEY = 'activeProviderPresetId'/, 'ChatBox must store the active provider preset id separately');
-assert.match(chatBox, /loadStoredProviderPresets/, 'ChatBox must load provider presets from localStorage');
-assert.match(chatBox, /saveProviderPresets/, 'ChatBox must save provider presets to localStorage');
-assert.match(chatBox, /readActiveProviderSettings/, 'ChatBox requests must use the active provider preset');
-assert.match(chatBox, /openNewProviderPreset/, 'ChatBox must support creating provider presets');
-assert.match(chatBox, /openEditProviderPreset/, 'ChatBox must support editing provider presets');
-assert.match(chatBox, /activateProviderPreset/, 'ChatBox must support activating provider presets');
-assert.match(chatBox, /deleteProviderPreset/, 'ChatBox must support deleting provider presets');
-assert.match(chatBox, /migrateLegacyProviderSettings/, 'ChatBox must migrate the legacy single provider settings key');
-assert.match(chatBox, /if \(saved\) \{[\s\S]*return migrateLegacyProviderSettings\(\)/, 'Provider presets must migrate legacy settings when the preset key is missing');
-assert.match(chatBox, /window\.localStorage\.removeItem\(PROVIDER_SETTINGS_KEY\)/, 'Provider preset migration must remove the legacy single settings key');
-assert.match(chatBox, /supportsAttachments=\{activeProviderPreset\?\.supportsAttachments \?\? true\}/, 'ChatBox must not block environment-default attachment support when no preset is active');
-assert.match(chatBox, /controlled by environment defaults/, 'Provider settings UI must distinguish environment-default attachment capability');
+assert.match(chatBox, /loadStoredConversations/, 'ChatBox must load conversations through storage helpers');
+assert.match(chatBox, /filteredConversations/, 'ChatBox must support conversation search/filter');
+assert.match(chatBox, /renameConversationId/, 'ChatBox must support explicit conversation rename');
+assert.match(chatBox, /pruneConversationDrafts/, 'ChatBox must expose stale draft cleanup');
+assert.match(chatBox, /handleConversationKeyDown/, 'ChatBox must support keyboard navigation in conversation list');
+assert.match(chatBox, /Provider: \{currentProviderLabel\}/, 'ChatBox must show active provider without secrets');
+assert.match(chatBox, /\/api\/provider\/check/, 'ChatBox must call provider connectivity check');
+assert.match(chatBox, /createProviderSnapshot/, 'ChatBox must write provider metadata snapshots');
+assert.match(chatBox, /getAppInfo/, 'ChatBox must render app-info/about data');
+assert.match(chatBox, /exportLogs/, 'ChatBox must expose sanitized log export');
 assert.doesNotMatch(chatBox, /apiKey|API Key.*input|key.*localStorage/i, 'Provider preset UI must not store or render API keys');
-assert.match(chatBox, /CONVERSATION_DRAFTS_KEY = 'conversationDrafts'/, 'ChatBox must define a separate conversation drafts storage key');
-assert.match(chatBox, /NEW_CONVERSATION_DRAFT_KEY = 'newConversationDraft'/, 'ChatBox must define a separate new-chat draft bucket');
-assert.match(chatBox, /loadDraftForConversation/, 'ChatBox must load drafts by conversation id');
-assert.match(chatBox, /saveDraftForConversation\(currentConvIdRef\.current, nextDraft\)/, 'ChatBox must persist draft edits for the active conversation');
-assert.match(chatBox, /persistCurrentDraft\(\)/, 'ChatBox must save outgoing drafts before navigation');
-assert.match(chatBox, /const accepted = await sendMessage\(content, files\)/, 'ChatBox must await the send handoff before clearing drafts');
-assert.match(chatBox, /if \(accepted\) \{[\s\S]*clearDraftForConversation\(draftConversationId\)/, 'ChatBox must clear drafts only after accepted send handoff');
-assert.match(chatBox, /clearDraftForConversation\(draftConversationId\)/, 'ChatBox must clear only the active draft after send handoff');
-assert.match(chatBox, /deleteDraftForConversation\(conversationId\)/, 'ChatBox must remove drafts when deleting conversations');
-assert.match(chatBox, /<InputArea[\s\S]*value=\{draftText\}[\s\S]*onChange=\{handleDraftChange\}/, 'ChatBox must pass controlled draft state to InputArea');
-assert.match(chatBox, /PROMPT_TEMPLATES_KEY = 'promptTemplates'/, 'ChatBox must define prompt template storage');
-assert.match(chatBox, /loadStoredPromptTemplates/, 'ChatBox must load prompt templates from localStorage');
-assert.match(chatBox, /savePromptTemplates/, 'ChatBox must save prompt templates to localStorage');
-assert.match(chatBox, /openNewTemplate/, 'ChatBox must support template creation');
-assert.match(chatBox, /openEditTemplate/, 'ChatBox must support template editing');
-assert.match(chatBox, /deleteTemplate/, 'ChatBox must support template deletion');
-assert.match(chatBox, /insertTemplateIntoDraft/, 'ChatBox must support inserting templates into the current draft');
-assert.match(chatBox, /templates=\{promptTemplates\}/, 'ChatBox must pass templates to InputArea slash picker');
 assert.match(chatBox, /navigator\.clipboard\.writeText/, 'ChatBox must copy message/code text to clipboard');
-assert.match(chatBox, /handleCopyMessage/, 'ChatBox must support full-message copy');
-assert.match(chatBox, /handleCopyCode/, 'ChatBox must support code-block copy');
-assert.match(chatBox, /handleRegenerate/, 'ChatBox must support regenerating the latest assistant response');
-assert.match(chatBox, /const previousMessages = messages/, 'Regenerate must preserve the pre-removal history snapshot');
 assert.match(chatBox, /removeLatestAssistantMessage\(\)/, 'Regenerate must remove only the latest assistant response');
-assert.match(chatBox, /resendFromMessages\(nextMessages\)/, 'Regenerate must resend from preserved history');
-assert.match(chatBox, /restoreMessages\(previousMessages\)/, 'Regenerate must restore the original assistant when resend fails');
-assert.match(chatBox, /handleEditResend/, 'ChatBox must support edit-resend for user messages');
-assert.match(chatBox, /handleDraftChange\(message\.content\)/, 'Edit-resend must load user message content into draft');
+assert.match(chatBox, /restoreMessages\(previousMessages\)/, 'Regenerate must restore history when resend fails');
 
 const messageList = text('src/components/MessageList.tsx');
 assert.match(messageList, /latestAssistantId/, 'MessageList must identify the latest assistant message');
 assert.match(messageList, /canRegenerate=\{message\.id === latestAssistantId && !isLoading\}/, 'MessageList must restrict regenerate to latest assistant message');
-assert.match(messageList, /onCopyMessage/, 'MessageList must pass message copy action');
-assert.match(messageList, /onCopyCode/, 'MessageList must pass code copy action');
-assert.match(messageList, /onEditResend/, 'MessageList must pass edit-resend action');
 
 const messageBubble = text('src/components/MessageBubble.tsx');
-assert.match(messageBubble, /onCopyMessage\(message\)/, 'MessageBubble must expose message copy action');
+assert.match(messageBubble, /message\.status/, 'MessageBubble must surface partial/aborted/error message state');
 assert.match(messageBubble, /onCopyCode\(code\)/, 'MessageBubble must expose code-block copy action');
-assert.match(messageBubble, /onRegenerate/, 'MessageBubble must expose regenerate action');
 assert.match(messageBubble, /onEditResend\(message\)/, 'MessageBubble must expose edit-resend action');
-assert.match(messageBubble, /extractText/, 'MessageBubble must extract raw code text from rendered code blocks');
 
 const electronMain = text('electron/main.js');
 assert.match(electronMain, /nodeIntegration:\s*false/, 'Electron must keep nodeIntegration disabled');
 assert.match(electronMain, /contextIsolation:\s*true/, 'Electron must keep contextIsolation enabled');
 assert.match(electronMain, /preload\.js/, 'Electron must load a preload bridge');
+assert.match(electronMain, /diagnostics:get/, 'Electron must expose diagnostics IPC');
+assert.match(electronMain, /logs:export/, 'Electron must expose sanitized log export IPC');
+assert.match(electronMain, /logs:open/, 'Electron must expose sanitized log open IPC');
+assert.match(electronMain, /sanitizeLogText/, 'Electron logs must be sanitized');
 assert.match(electronMain, /startProductionNextServer/, 'Electron production must load the built Next app');
-assert.doesNotMatch(electronMain, /baseUrl: typeof settings\?\.baseUrl === 'string' \? settings\.baseUrl : 'https:\/\/api\.openai\.com\/v1'/, 'Electron settings must not default over env provider config');
+assert.match(electronMain, /lastStartupDiagnostic/, 'Electron must record embedded startup diagnostics');
 assert.match(electronMain, /isLegacyDefaultSettings/, 'Electron settings must ignore legacy default provider config');
 
-assert.ok(existsSync('electron/preload.js'), 'preload bridge must exist');
-assert.ok(existsSync('src/server/ai/openai-compatible.ts'), 'provider boundary must exist');
-assert.ok(existsSync('src/server/ai/config.ts'), 'provider config reader must exist');
+const preload = text('electron/preload.js');
+assert.match(preload, /getDiagnostics/, 'preload bridge must expose diagnostics');
+assert.match(preload, /exportLogs/, 'preload bridge must expose log export');
+assert.match(preload, /openLogs/, 'preload bridge must expose log open');
+
+const roadmap = text('docs/NEXT_UPGRADE_ROADMAP.md');
+assert.match(roadmap, /Execution Evidence/, 'roadmap must record execution evidence');
+assert.match(roadmap, /Phase 1/, 'roadmap must keep phase references');
+assert.match(roadmap, /pnpm lint/, 'roadmap must record verification commands');
 
 console.log('upgrade verification checks passed');

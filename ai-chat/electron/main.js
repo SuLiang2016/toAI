@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, shell } = require('electron');
 const fs = require('fs');
 const http = require('http');
 const next = require('next');
@@ -8,6 +8,7 @@ const path = require('path');
 
 let mainWindow;
 let nextServer;
+let lastStartupDiagnostic = null;
 
 const FALLBACK_BOUNDS = {
   width: 1200,
@@ -82,9 +83,30 @@ function isLegacyDefaultSettings(settings) {
 
 function logAppEvent(message, details) {
   const logPath = path.join(app.getPath('logs'), 'main.log');
-  const safeDetails = details ? JSON.stringify(details).replace(/sk-[A-Za-z0-9_-]+/g, 'sk-***') : '';
+  const safeDetails = details ? sanitizeLogText(JSON.stringify(details)) : '';
   fs.mkdirSync(path.dirname(logPath), { recursive: true });
   fs.appendFileSync(logPath, `${new Date().toISOString()} ${message} ${safeDetails}${os.EOL}`);
+}
+
+function getMainLogPath() {
+  return path.join(app.getPath('logs'), 'main.log');
+}
+
+function sanitizeLogText(text) {
+  return String(text)
+    .replace(/sk-[A-Za-z0-9_-]+/g, 'sk-***')
+    .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, 'Bearer ***')
+    .replace(/(["']?(?:api[_-]?key|token|secret|password)["']?\s*[:=]\s*["']?)[^"',}\s]+(["']?)/gi, '$1***$2')
+    .replace(/[A-Za-z]:\\[^\s"'<>]+/g, '[local path]')
+    .replace(/\/(?:Users|home|var|tmp|etc)\/[^\s"'<>]+/g, '[local path]');
+}
+
+function exportSanitizedLogs() {
+  const source = getMainLogPath();
+  const target = path.join(app.getPath('userData'), 'sanitized-main.log');
+  const content = fs.existsSync(source) ? fs.readFileSync(source, 'utf8') : '';
+  fs.writeFileSync(target, sanitizeLogText(content));
+  return target;
 }
 
 function registerIpc() {
@@ -104,6 +126,16 @@ function registerIpc() {
     version: app.getVersion(),
     platform: process.platform,
   }));
+  ipcMain.handle('diagnostics:get', () => ({
+    logsPath: getMainLogPath(),
+    lastStartupDiagnostic,
+  }));
+  ipcMain.handle('logs:export', () => ({ path: exportSanitizedLogs() }));
+  ipcMain.handle('logs:open', async () => {
+    const target = exportSanitizedLogs();
+    const error = await shell.openPath(target);
+    return { path: target, error: error || null };
+  });
 }
 
 async function startProductionNextServer() {
@@ -129,6 +161,7 @@ async function startProductionNextServer() {
     server,
     url: `http://127.0.0.1:${address.port}`,
   };
+  lastStartupDiagnostic = { status: 'ok', url: nextServer.url, at: new Date().toISOString() };
   return nextServer.url;
 }
 
@@ -166,6 +199,11 @@ async function createWindow() {
       await mainWindow.loadURL(await startProductionNextServer());
     }
   } catch (error) {
+    lastStartupDiagnostic = {
+      status: 'failed',
+      message: sanitizeLogText(error.message),
+      at: new Date().toISOString(),
+    };
     logAppEvent('window-load-failed', { message: error.message });
     throw error;
   }

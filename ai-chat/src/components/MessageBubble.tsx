@@ -89,6 +89,9 @@ export default function MessageBubble({
 
           <div className={`mt-2 text-xs ${isUser ? 'text-blue-100' : 'text-gray-500'}`}>
             {new Date(message.timestamp).toLocaleTimeString()}
+            {message.status && message.status !== 'complete' && (
+              <span className="ml-2 uppercase tracking-wide">{message.status.replace('_', ' ')}</span>
+            )}
           </div>
         </div>
 

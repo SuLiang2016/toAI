@@ -1,5 +1,7 @@
-import { useState, useCallback, useRef } from 'react';
-import { ChatRequest, Message, ProviderSettings } from '@/types/chat';
+import { MutableRefObject, useState, useCallback, useRef } from 'react';
+import { consumeSseBuffer, readStreamEventContent, StreamingParseError } from '@/lib/streaming';
+import { validateProviderSettings } from '@/lib/storage';
+import { ChatErrorKind, ChatErrorState, ChatRequest, Message, ProviderSettings } from '@/types/chat';
 
 interface UseChatOptions {
   initialMessages?: Message[];
@@ -11,7 +13,7 @@ export function useChat(options?: UseChatOptions) {
   const { initialMessages = [], onMessagesChange, getSettings } = options ?? {};
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [errorState, setErrorState] = useState<ChatErrorState | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const messagesRef = useRef<Message[]>(initialMessages);
 
@@ -29,7 +31,7 @@ export function useChat(options?: UseChatOptions) {
       updateMessages,
       messagesRef,
       setIsLoading,
-      setError,
+      setErrorState,
       abortControllerRef,
     });
   }, [getSettings, updateMessages]);
@@ -42,7 +44,7 @@ export function useChat(options?: UseChatOptions) {
       updateMessages,
       messagesRef,
       setIsLoading,
-      setError,
+      setErrorState,
       abortControllerRef,
       baseMessages: nextMessages,
       skipUserMessageCreation: true,
@@ -57,7 +59,7 @@ export function useChat(options?: UseChatOptions) {
 
   const clearMessages = useCallback(() => {
     updateMessages([]);
-    setError(null);
+    setErrorState(null);
   }, [updateMessages]);
 
   const restoreMessages = useCallback((nextMessages: Message[]) => {
@@ -66,7 +68,7 @@ export function useChat(options?: UseChatOptions) {
 
   const loadMessages = useCallback((nextMessages: Message[]) => {
     updateMessages(nextMessages);
-    setError(null);
+    setErrorState(null);
   }, [updateMessages]);
 
   const removeLatestAssistantMessage = useCallback(() => {
@@ -84,7 +86,8 @@ export function useChat(options?: UseChatOptions) {
   return {
     messages,
     isLoading,
-    error,
+    error: errorState?.message ?? null,
+    errorState,
     sendMessage,
     resendFromMessages,
     stopGeneration,
@@ -100,10 +103,10 @@ interface ChatSubmissionOptions {
   attachments?: File[];
   getSettings?: () => Promise<ProviderSettings | undefined>;
   updateMessages: (messages: Message[]) => void;
-  messagesRef: React.MutableRefObject<Message[]>;
+  messagesRef: MutableRefObject<Message[]>;
   setIsLoading: (loading: boolean) => void;
-  setError: (error: string | null) => void;
-  abortControllerRef: React.MutableRefObject<AbortController | null>;
+  setErrorState: (error: ChatErrorState | null) => void;
+  abortControllerRef: MutableRefObject<AbortController | null>;
   baseMessages?: Message[];
   skipUserMessageCreation?: boolean;
 }
@@ -115,7 +118,7 @@ async function submitChatTurn({
   updateMessages,
   messagesRef,
   setIsLoading,
-  setError,
+  setErrorState,
   abortControllerRef,
   baseMessages,
   skipUserMessageCreation = false,
@@ -138,9 +141,13 @@ async function submitChatTurn({
 
     updateMessages(messagesWithUser);
     setIsLoading(true);
-    setError(null);
+    setErrorState(null);
 
     abortControllerRef.current = new AbortController();
+    const providerValidation = validateProviderSettings(await getSettings?.());
+    if (!providerValidation.ok) {
+      throw new ChatSubmissionError('validation_error', providerValidation.message || 'Provider settings are invalid');
+    }
 
     const requestBody: ChatRequest = {
       messages: messagesWithUser.map(message => ({
@@ -154,7 +161,7 @@ async function submitChatTurn({
           data: attachment.data,
         })),
       })),
-      settings: await getSettings?.(),
+      settings: providerValidation.settings,
     };
 
     const response = await fetch('/api/chat', {
@@ -165,12 +172,12 @@ async function submitChatTurn({
     });
 
     if (!response.ok) {
-      throw new Error(await readErrorResponse(response));
+      throw new ChatSubmissionError('upstream_error', await readErrorResponse(response));
     }
 
     const reader = response.body?.getReader();
     if (!reader) {
-      throw new Error('AI service returned no response stream');
+      throw new ChatSubmissionError('upstream_error', 'AI service returned no response stream');
     }
 
     const decoder = new TextDecoder();
@@ -183,6 +190,7 @@ async function submitChatTurn({
       role: 'assistant',
       content: '',
       timestamp: Date.now(),
+      status: 'streaming',
     };
 
     updateMessages([...messagesWithUser, assistantMessage]);
@@ -195,37 +203,52 @@ async function submitChatTurn({
       const result = consumeSseBuffer(buffered);
       buffered = result.remainder;
       sawDone = sawDone || result.done;
-      assistantContent = applyStreamEvents(
-        result.events,
-        assistantContent,
-        assistantMessage.id,
-        () => messagesRef.current,
-        updateMessages
-      );
+      assistantContent = appendStreamEvents(result.events, assistantContent, assistantMessage.id, () => messagesRef.current, updateMessages);
     }
 
     if (buffered.trim()) {
       const result = consumeSseBuffer(`${buffered}\n`);
       sawDone = sawDone || result.done;
-      applyStreamEvents(
-        result.events,
-        assistantContent,
-        assistantMessage.id,
-        () => messagesRef.current,
-        updateMessages
-      );
+      assistantContent = appendStreamEvents(result.events, assistantContent, assistantMessage.id, () => messagesRef.current, updateMessages);
     }
 
     if (!sawDone) {
-      throw new Error('AI response stream ended before the completion marker');
+      setAssistantMessageStatus(assistantMessage.id, assistantContent ? 'partial' : 'error', () => messagesRef.current, updateMessages);
+      throw new ChatSubmissionError('incomplete_stream', 'AI response stream ended before the completion marker');
     }
 
+    setAssistantMessageStatus(assistantMessage.id, 'complete', () => messagesRef.current, updateMessages);
     return true;
   } catch (err: unknown) {
     if (err instanceof DOMException && err.name === 'AbortError') {
-      setError(null);
+      markLatestAssistantMessage('aborted', () => messagesRef.current, updateMessages);
+      setErrorState({
+        kind: 'abort',
+        message: 'Generation stopped. Partial response preserved.',
+        recoverable: true,
+      });
+    } else if (err instanceof ChatSubmissionError) {
+      setErrorState({
+        kind: err.kind,
+        message: sanitizeClientError(err.message),
+        recoverable: err.kind !== 'validation_error',
+      });
+      if (err.kind === 'incomplete_stream') {
+        markLatestAssistantMessage('partial', () => messagesRef.current, updateMessages);
+      }
+    } else if (err instanceof StreamingParseError) {
+      markLatestAssistantMessage('error', () => messagesRef.current, updateMessages);
+      setErrorState({
+        kind: 'incomplete_stream',
+        message: sanitizeClientError(err.message),
+        recoverable: true,
+      });
     } else {
-      setError(sanitizeClientError(err instanceof Error ? err.message : 'Failed to send message'));
+      setErrorState({
+        kind: 'network_error',
+        message: sanitizeClientError(err instanceof Error ? err.message : 'Failed to send message'),
+        recoverable: true,
+      });
       console.error('Chat error:', err);
     }
     return false;
@@ -235,64 +258,63 @@ async function submitChatTurn({
   }
 }
 
-interface StreamEvent {
-  choices?: Array<{
-    delta?: {
-      content?: string;
-    };
-  }>;
-}
-
-function consumeSseBuffer(buffer: string): { events: StreamEvent[]; remainder: string; done: boolean } {
-  const lines = buffer.split(/\r?\n/);
-  const remainder = lines.pop() || '';
-  const events: StreamEvent[] = [];
-  let done = false;
-
-  for (const line of lines) {
-    if (!line.startsWith('data: ')) continue;
-
-    const data = line.slice(6).trim();
-    if (!data) continue;
-    if (data === '[DONE]') {
-      done = true;
-      continue;
-    }
-
-    try {
-      events.push(JSON.parse(data) as StreamEvent);
-    } catch {
-      throw new Error('AI service returned invalid streaming data');
-    }
-  }
-
-  return { events, remainder, done };
-}
-
-function applyStreamEvents(
-  events: StreamEvent[],
+function appendStreamEvents(
+  events: Parameters<typeof readStreamEventContent>[0],
   currentContent: string,
   assistantMessageId: string,
   getMessages: () => Message[],
   updateMessages: (messages: Message[]) => void
 ): string {
-  let nextContent = currentContent;
+  const nextContent = currentContent + readStreamEventContent(events);
+  if (nextContent === currentContent) return currentContent;
 
-  for (const event of events) {
-    const delta = event.choices?.[0]?.delta?.content;
-    if (!delta) continue;
-
-    nextContent += delta;
-    updateMessages(
-      getMessages().map(message =>
-        message.id === assistantMessageId
-          ? { ...message, content: nextContent }
-          : message
-      )
-    );
-  }
+  updateMessages(
+    getMessages().map(message =>
+      message.id === assistantMessageId
+        ? { ...message, content: nextContent, status: 'streaming' }
+        : message
+    )
+  );
 
   return nextContent;
+}
+
+function setAssistantMessageStatus(
+  assistantMessageId: string,
+  status: Message['status'],
+  getMessages: () => Message[],
+  updateMessages: (messages: Message[]) => void
+) {
+  updateMessages(
+    getMessages().map(message =>
+      message.id === assistantMessageId ? { ...message, status } : message
+    )
+  );
+}
+
+function markLatestAssistantMessage(
+  status: Message['status'],
+  getMessages: () => Message[],
+  updateMessages: (messages: Message[]) => void
+) {
+  const nextMessages = [...getMessages()];
+  for (let i = nextMessages.length - 1; i >= 0; i -= 1) {
+    if (nextMessages[i]?.role === 'assistant') {
+      nextMessages[i] = { ...nextMessages[i], status };
+      updateMessages(nextMessages);
+      return;
+    }
+  }
+}
+
+class ChatSubmissionError extends Error {
+  kind: ChatErrorKind;
+
+  constructor(kind: ChatErrorKind, message: string) {
+    super(message);
+    this.name = 'ChatSubmissionError';
+    this.kind = kind;
+  }
 }
 
 function createId(): string {

@@ -1,26 +1,38 @@
 'use client';
 
-/* eslint-disable react-hooks/set-state-in-effect -- localStorage must hydrate after the first client mount. */
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import MessageList from './MessageList';
 import InputArea from './InputArea';
 import { useChat } from '@/hooks/useChat';
-import { Conversation, Message, PromptTemplate, ProviderPreset, ProviderSettings } from '@/types/chat';
-
-const CONVERSATIONS_KEY = 'conversations';
-const ACTIVE_CONVERSATION_KEY = 'currentConversationId';
-const CONVERSATION_DRAFTS_KEY = 'conversationDrafts';
-const NEW_CONVERSATION_DRAFT_KEY = 'newConversationDraft';
-const PROMPT_TEMPLATES_KEY = 'promptTemplates';
-const PROVIDER_PRESETS_KEY = 'providerPresets';
-const ACTIVE_PROVIDER_PRESET_KEY = 'activeProviderPresetId';
-const PROVIDER_SETTINGS_KEY = 'providerSettings';
-const LEGACY_DEFAULT_BASE_URL = 'https://api.openai.com/v1';
-const LEGACY_DEFAULT_MODEL = 'gpt-3.5-turbo';
-
-type StoredProviderSettings = ProviderSettings & {
-  version?: number;
-};
+import {
+  ACTIVE_PROVIDER_PRESET_KEY,
+  CONVERSATION_DRAFTS_KEY,
+  CONVERSATIONS_KEY,
+  PROMPT_TEMPLATES_KEY,
+  PROVIDER_PRESETS_KEY,
+  PROVIDER_SETTINGS_KEY,
+  clearDraftForConversation,
+  createProviderSnapshot,
+  createStorageId,
+  deleteDraftForConversation,
+  loadActiveProviderPresetId,
+  loadDraftForConversation,
+  loadInitialConversationId,
+  loadStoredConversations,
+  loadStoredPromptTemplates,
+  loadStoredProviderPresets,
+  normalizeProviderSettings,
+  pruneConversationDrafts,
+  readActiveProviderSettings,
+  saveActiveConversationId,
+  saveActiveProviderPresetId,
+  saveConversations,
+  saveDraftForConversation,
+  savePromptTemplates,
+  saveProviderPresets,
+  validateProviderSettings,
+} from '@/lib/storage';
+import { Conversation, Message, PromptTemplate, ProviderPreset, ProviderSnapshot } from '@/types/chat';
 
 interface TemplateFormDraft {
   id: string | null;
@@ -34,6 +46,16 @@ interface ProviderPresetFormDraft {
   baseUrl: string;
   model: string;
   supportsAttachments: boolean;
+}
+
+interface AboutInfo {
+  version: string;
+  platform: string;
+}
+
+interface DiagnosticsInfo {
+  logsPath: string;
+  lastStartupDiagnostic: unknown;
 }
 
 const EMPTY_TEMPLATE_FORM: TemplateFormDraft = {
@@ -55,6 +77,7 @@ export default function ChatBox() {
   const [currentConvId, setCurrentConvId] = useState<string | null>(null);
   const [showSidebar, setShowSidebar] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
+  const [showAbout, setShowAbout] = useState(false);
   const [draftText, setDraftText] = useState('');
   const [promptTemplates, setPromptTemplates] = useState<PromptTemplate[]>([]);
   const [showTemplateEditor, setShowTemplateEditor] = useState(false);
@@ -62,10 +85,35 @@ export default function ChatBox() {
   const [providerPresets, setProviderPresets] = useState<ProviderPreset[]>([]);
   const [activeProviderPresetId, setActiveProviderPresetId] = useState<string | null>(null);
   const [presetDraft, setPresetDraft] = useState<ProviderPresetFormDraft>(EMPTY_PROVIDER_PRESET_FORM);
+  const [renameConversationId, setRenameConversationId] = useState<string | null>(null);
+  const [renameDraft, setRenameDraft] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [providerCheckState, setProviderCheckState] = useState<string | null>(null);
+  const [providerError, setProviderError] = useState<string | null>(null);
+  const [aboutInfo, setAboutInfo] = useState<AboutInfo | null>(null);
+  const [diagnosticsInfo, setDiagnosticsInfo] = useState<DiagnosticsInfo | null>(null);
+  const [logActionStatus, setLogActionStatus] = useState<string | null>(null);
+  const [providerCheckInFlight, setProviderCheckInFlight] = useState(false);
   const currentConvIdRef = useRef<string | null>(currentConvId);
   const draftTextRef = useRef('');
+  const conversationButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const providerSnapshotRef = useRef<ProviderSnapshot>(createProviderSnapshot());
 
-  const currentConversation = conversations.find(conversation => conversation.id === currentConvId);
+  const currentConversation = conversations.find(conversation => conversation.id === currentConvId) ?? null;
+  const activeProviderPreset = providerPresets.find(preset => preset.id === activeProviderPresetId) ?? null;
+  const activeProviderSnapshot = useMemo(() => createProviderSnapshot(activeProviderPreset ?? undefined), [activeProviderPreset]);
+  const filteredConversations = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return conversations;
+
+    return conversations.filter(conversation => {
+      if (conversation.title.toLowerCase().includes(query)) return true;
+      return conversation.messages.some(message =>
+        message.content.toLowerCase().includes(query) ||
+        message.attachments?.some(attachment => attachment.name.toLowerCase().includes(query))
+      );
+    });
+  }, [conversations, searchQuery]);
 
   const loadDraftIntoState = useCallback((conversationId: string | null) => {
     const nextDraft = loadDraftForConversation(conversationId);
@@ -95,12 +143,10 @@ export default function ChatBox() {
         messages: nextMessages,
         createdAt: existing?.createdAt || Date.now(),
         updatedAt: Date.now(),
+        provider: existing?.provider ?? providerSnapshotRef.current,
       };
 
-      const nextConversations = [
-        nextConversation,
-        ...previous.filter(conversation => conversation.id !== conversationId),
-      ];
+      const nextConversations = [nextConversation, ...previous.filter(conversation => conversation.id !== conversationId)];
       saveConversations(nextConversations);
       return nextConversations;
     });
@@ -112,6 +158,7 @@ export default function ChatBox() {
     messages,
     isLoading,
     error,
+    errorState,
     sendMessage,
     resendFromMessages,
     stopGeneration,
@@ -128,18 +175,35 @@ export default function ChatBox() {
   useEffect(() => {
     const storedConversations = loadStoredConversations();
     const activeId = loadInitialConversationId(storedConversations);
-    const activeConversation = storedConversations.find(conversation => conversation.id === activeId);
+    const activeConversation = storedConversations.find(conversation => conversation.id === activeId) ?? null;
 
     currentConvIdRef.current = activeId;
     setConversations(storedConversations);
     setPromptTemplates(loadStoredPromptTemplates());
     const storedProviderPresets = loadStoredProviderPresets();
     setProviderPresets(storedProviderPresets);
-    setActiveProviderPresetId(loadActiveProviderPresetId(storedProviderPresets));
+    const storedActiveProviderPresetId = loadActiveProviderPresetId(storedProviderPresets);
+    setActiveProviderPresetId(storedActiveProviderPresetId);
     setCurrentConvId(activeId);
     loadMessages(activeConversation?.messages ?? []);
     loadDraftIntoState(activeId);
+    providerSnapshotRef.current = activeConversation?.provider ?? createProviderSnapshot(storedProviderPresets.find(preset => preset.id === storedActiveProviderPresetId) ?? undefined);
   }, [loadDraftIntoState, loadMessages]);
+
+  useEffect(() => {
+    providerSnapshotRef.current = activeProviderSnapshot;
+  }, [activeProviderSnapshot]);
+
+  useEffect(() => {
+    if (showAbout && window.aiChat) {
+      if (!aboutInfo && window.aiChat.getAppInfo) {
+        void window.aiChat.getAppInfo().then(setAboutInfo).catch(() => setAboutInfo(null));
+      }
+      if (!diagnosticsInfo && window.aiChat.getDiagnostics) {
+        void window.aiChat.getDiagnostics().then(setDiagnosticsInfo).catch(() => setDiagnosticsInfo(null));
+      }
+    }
+  }, [aboutInfo, diagnosticsInfo, showAbout]);
 
   const handleNewChat = () => {
     persistCurrentDraft();
@@ -155,6 +219,7 @@ export default function ChatBox() {
     currentConvIdRef.current = conversation.id;
     setCurrentConvId(conversation.id);
     saveActiveConversationId(conversation.id);
+    providerSnapshotRef.current = conversation.provider ?? activeProviderSnapshot;
     loadMessages(conversation.messages);
     loadDraftIntoState(conversation.id);
   };
@@ -163,7 +228,7 @@ export default function ChatBox() {
     const draftConversationId = currentConvIdRef.current;
 
     if (!currentConvIdRef.current) {
-      const nextId = createId();
+      const nextId = createStorageId();
       currentConvIdRef.current = nextId;
       setCurrentConvId(nextId);
       saveActiveConversationId(nextId);
@@ -197,6 +262,39 @@ export default function ChatBox() {
     }
   };
 
+  const handleStartRename = (conversation: Conversation) => {
+    setRenameConversationId(conversation.id);
+    setRenameDraft(conversation.title);
+  };
+
+  const handleSaveRename = () => {
+    const conversationId = renameConversationId;
+    if (!conversationId) return;
+
+    const title = renameDraft.trim();
+    if (!title) return;
+
+    const nextConversations = conversations.map(conversation =>
+      conversation.id === conversationId ? { ...conversation, title, updatedAt: Date.now() } : conversation
+    );
+    setConversations(nextConversations);
+    saveConversations(nextConversations);
+    setRenameConversationId(null);
+    setRenameDraft('');
+  };
+
+  const handleConversationKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>, conversationId: string) => {
+    const index = filteredConversations.findIndex(conversation => conversation.id === conversationId);
+    if (index < 0) return;
+
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      const nextIndex = event.key === 'ArrowDown' ? index + 1 : index - 1;
+      const nextConversation = filteredConversations[nextIndex];
+      conversationButtonRefs.current[nextConversation?.id ?? '']?.focus();
+    }
+  };
+
   const copyToClipboard = async (text: string) => {
     if (!text) return;
     await navigator.clipboard.writeText(text);
@@ -225,30 +323,16 @@ export default function ChatBox() {
     handleDraftChange(message.content);
   };
 
-  const activeProviderPreset = providerPresets.find(preset => preset.id === activeProviderPresetId);
-
-  const openSettings = () => {
-    setPresetDraft(EMPTY_PROVIDER_PRESET_FORM);
-    setShowSettings(true);
-  };
-
-  const openNewProviderPreset = () => {
-    setPresetDraft(EMPTY_PROVIDER_PRESET_FORM);
-  };
-
-  const openEditProviderPreset = (preset: ProviderPreset) => {
-    setPresetDraft({
-      id: preset.id,
-      name: preset.name,
-      baseUrl: preset.baseUrl ?? '',
-      model: preset.model ?? '',
-      supportsAttachments: preset.supportsAttachments ?? false,
-    });
-  };
-
   const saveProviderPreset = () => {
+    setProviderError(null);
     const now = Date.now();
-    const normalizedPreset = normalizeProviderSettings(presetDraft);
+    const validation = validateProviderSettings(normalizeProviderSettings(presetDraft));
+    if (!validation.ok) {
+      setProviderError(validation.message || 'Provider preset is invalid.');
+      return;
+    }
+
+    const normalizedPreset = validation.settings ?? {};
     const name = presetDraft.name.trim() || normalizedPreset.model || 'Provider preset';
     const nextPresets = presetDraft.id
       ? providerPresets.map(preset =>
@@ -259,7 +343,7 @@ export default function ChatBox() {
       : [
           ...providerPresets,
           {
-            id: createId(),
+            id: createStorageId(),
             name,
             ...normalizedPreset,
             createdAt: now,
@@ -280,6 +364,17 @@ export default function ChatBox() {
     saveActiveProviderPresetId(presetId);
   };
 
+  const openEditProviderPreset = (preset: ProviderPreset) => {
+    setPresetDraft({
+      id: preset.id,
+      name: preset.name,
+      baseUrl: preset.baseUrl ?? '',
+      model: preset.model ?? '',
+      supportsAttachments: preset.supportsAttachments ?? false,
+    });
+    setProviderError(null);
+  };
+
   const deleteProviderPreset = (presetId: string) => {
     const nextPresets = providerPresets.filter(preset => preset.id !== presetId);
     const nextActiveId = activeProviderPresetId === presetId ? nextPresets[0]?.id ?? null : activeProviderPresetId;
@@ -290,6 +385,57 @@ export default function ChatBox() {
     if (presetDraft.id === presetId) {
       setPresetDraft(EMPTY_PROVIDER_PRESET_FORM);
     }
+  };
+
+  const checkProviderPreset = async () => {
+    setProviderCheckInFlight(true);
+    setProviderCheckState(null);
+    setProviderError(null);
+
+    try {
+      const response = await fetch('/api/provider/check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ settings: activeProviderPreset ? normalizeProviderSettings(activeProviderPreset) : undefined }),
+      });
+      const payload = await response.json();
+      if (!response.ok || payload?.ok === false) {
+        setProviderCheckState(payload?.error || 'Provider connectivity check failed.');
+        return;
+      }
+
+      setProviderCheckState(`Reachable: ${payload.model || activeProviderPreset?.model || 'model configured'}`);
+    } catch (error) {
+      setProviderCheckState(error instanceof Error ? error.message : 'Provider connectivity check failed.');
+    } finally {
+      setProviderCheckInFlight(false);
+    }
+  };
+
+  const openSettings = () => {
+    setPresetDraft(EMPTY_PROVIDER_PRESET_FORM);
+    setProviderError(null);
+    setProviderCheckState(null);
+    setShowSettings(true);
+  };
+
+  const openAbout = () => {
+    setAboutInfo(null);
+    setDiagnosticsInfo(null);
+    setLogActionStatus(null);
+    setShowAbout(true);
+  };
+
+  const exportLogs = async () => {
+    if (!window.aiChat?.exportLogs) return;
+    const result = await window.aiChat.exportLogs();
+    setLogActionStatus(`Exported sanitized logs: ${result.path}`);
+  };
+
+  const openLogs = async () => {
+    if (!window.aiChat?.openLogs) return;
+    const result = await window.aiChat.openLogs();
+    setLogActionStatus(result.error ? result.error : `Opened sanitized logs: ${result.path}`);
   };
 
   const openNewTemplate = () => {
@@ -320,7 +466,7 @@ export default function ChatBox() {
         )
       : [
           {
-            id: createId(),
+            id: createStorageId(),
             title,
             content,
             createdAt: now,
@@ -346,10 +492,19 @@ export default function ChatBox() {
     handleDraftChange(`${draftTextRef.current}${separator}${template.content}`);
   };
 
+  const cleanDrafts = () => {
+    pruneConversationDrafts(conversations.map(conversation => conversation.id));
+    if (!currentConvIdRef.current && !draftTextRef.current.trim()) {
+      saveDraftForConversation(null, '');
+    }
+  };
+
+  const currentProviderLabel = activeProviderPreset?.name || activeProviderPreset?.model || 'Environment defaults';
+
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="flex h-screen overflow-hidden bg-gray-50">
       {showSidebar && (
-        <div className="flex w-64 flex-col border-r border-gray-200 bg-white">
+        <aside className="flex w-80 max-w-full flex-col border-r border-gray-200 bg-white">
           <div className="border-b border-gray-200 p-4">
             <button
               onClick={handleNewChat}
@@ -358,50 +513,72 @@ export default function ChatBox() {
             >
               + New chat
             </button>
+            <label className="mt-3 block">
+              <span className="sr-only">Search conversations</span>
+              <input
+                value={searchQuery}
+                onChange={event => setSearchQuery(event.target.value)}
+                placeholder="Search conversations"
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </label>
           </div>
 
           <div className="flex-1 overflow-y-auto">
-            {conversations.map(conversation => (
-              <div
-                key={conversation.id}
-                className={`group flex w-full items-center gap-2 border-b border-gray-100 px-3 py-3 hover:bg-gray-100 ${
-                  currentConvId === conversation.id ? 'border-l-4 border-l-blue-500 bg-blue-50' : ''
-                }`}
-              >
-                <button
-                  onClick={() => handleSelectConversation(conversation)}
-                  className="min-w-0 flex-1 text-left"
-                  type="button"
+            {filteredConversations.length > 0 ? (
+              filteredConversations.map(conversation => (
+                <div
+                  key={conversation.id}
+                  className={`group flex w-full items-center gap-2 border-b border-gray-100 px-3 py-3 hover:bg-gray-100 ${
+                    currentConvId === conversation.id ? 'border-l-4 border-l-blue-500 bg-blue-50' : ''
+                  }`}
                 >
-                  <div className="truncate text-sm font-medium text-gray-900">{conversation.title}</div>
-                  <div className="mt-1 text-xs text-gray-500">
-                    {new Date(conversation.updatedAt).toLocaleDateString()}
-                  </div>
-                </button>
-                <button
-                  onClick={() => handleDeleteConversation(conversation.id)}
-                  className="rounded p-1 text-gray-400 opacity-0 transition hover:bg-red-50 hover:text-red-600 group-hover:opacity-100"
-                  title="Delete conversation"
-                  aria-label={`Delete conversation ${conversation.title}`}
-                  type="button"
-                >
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 7h12M10 11v6m4-6v6m1-10V5a1 1 0 00-1-1h-4a1 1 0 00-1 1v2m-2 0l1 12a2 2 0 002 2h4a2 2 0 002-2l1-12" />
-                  </svg>
-                </button>
+                  <button
+                    ref={node => {
+                      conversationButtonRefs.current[conversation.id] = node;
+                    }}
+                    onClick={() => handleSelectConversation(conversation)}
+                    onKeyDown={event => handleConversationKeyDown(event, conversation.id)}
+                    className="min-w-0 flex-1 text-left"
+                    type="button"
+                  >
+                    <div className="truncate text-sm font-medium text-gray-900">{conversation.title}</div>
+                    <div className="mt-1 text-xs text-gray-500">{new Date(conversation.updatedAt).toLocaleDateString()}</div>
+                  </button>
+                  <button
+                    onClick={() => handleStartRename(conversation)}
+                    className="rounded p-1 text-gray-400 opacity-0 transition hover:bg-gray-100 hover:text-gray-700 group-hover:opacity-100"
+                    title="Rename conversation"
+                    aria-label={`Rename conversation ${conversation.title}`}
+                    type="button"
+                  >
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5h2M12 5v14m6-7H6" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={() => handleDeleteConversation(conversation.id)}
+                    className="rounded p-1 text-gray-400 opacity-0 transition hover:bg-red-50 hover:text-red-600 group-hover:opacity-100"
+                    title="Delete conversation"
+                    aria-label={`Delete conversation ${conversation.title}`}
+                    type="button"
+                  >
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 7h12M10 11v6m4-6v6m1-10V5a1 1 0 00-1-1h-4a1 1 0 00-1 1v2m-2 0l1 12a2 2 0 002 2h4a2 2 0 002-2l1-12" />
+                    </svg>
+                  </button>
+                </div>
+              ))
+            ) : (
+              <div className="px-4 py-8 text-sm text-gray-500">
+                No matching conversations
               </div>
-            ))}
+            )}
 
             <div className="border-t border-gray-200 px-3 py-3">
-              <div className="mb-2 flex items-center justify-between">
+              <div className="mb-2 flex items-center justify-between gap-2">
                 <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Templates</h2>
-                <button
-                  onClick={openNewTemplate}
-                  className="rounded px-2 py-1 text-xs text-blue-600 hover:bg-blue-50"
-                  type="button"
-                >
-                  Add
-                </button>
+                <button onClick={openNewTemplate} className="rounded px-2 py-1 text-xs text-blue-600 hover:bg-blue-50" type="button">Add</button>
               </div>
 
               {promptTemplates.length > 0 ? (
@@ -418,20 +595,8 @@ export default function ChatBox() {
                         <div className="mt-1 line-clamp-2 text-xs text-gray-500">{template.content}</div>
                       </button>
                       <div className="mt-2 flex justify-end gap-1">
-                        <button
-                          onClick={() => openEditTemplate(template)}
-                          className="rounded px-2 py-1 text-xs text-gray-600 hover:bg-gray-100"
-                          type="button"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => deleteTemplate(template.id)}
-                          className="rounded px-2 py-1 text-xs text-red-600 hover:bg-red-50"
-                          type="button"
-                        >
-                          Delete
-                        </button>
+                        <button onClick={() => openEditTemplate(template)} className="rounded px-2 py-1 text-xs text-gray-600 hover:bg-gray-100" type="button">Edit</button>
+                        <button onClick={() => deleteTemplate(template.id)} className="rounded px-2 py-1 text-xs text-red-600 hover:bg-red-50" type="button">Delete</button>
                       </div>
                     </div>
                   ))}
@@ -442,12 +607,24 @@ export default function ChatBox() {
                 </div>
               )}
             </div>
+
+            <div className="border-t border-gray-200 px-3 py-3 text-xs text-gray-500">
+              <div className="flex items-center justify-between">
+                <span>{filteredConversations.length} conversations</span>
+                <button onClick={cleanDrafts} className="rounded px-2 py-1 text-xs text-gray-600 hover:bg-gray-100" type="button">
+                  Clean drafts
+                </button>
+              </div>
+              <div className="mt-2 break-all text-[11px] text-gray-400">
+                Keys: {CONVERSATIONS_KEY}, {CONVERSATION_DRAFTS_KEY}, {PROMPT_TEMPLATES_KEY}, {PROVIDER_PRESETS_KEY}, {ACTIVE_PROVIDER_PRESET_KEY}, {PROVIDER_SETTINGS_KEY}
+              </div>
+            </div>
           </div>
-        </div>
+        </aside>
       )}
 
-      <div className="flex flex-1 flex-col">
-        <div className="flex items-center justify-between border-b border-gray-200 bg-white px-4 py-3">
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="flex items-center justify-between gap-3 border-b border-gray-200 bg-white px-4 py-3">
           <button
             onClick={() => setShowSidebar(!showSidebar)}
             className="rounded-lg p-2 transition-colors hover:bg-gray-100"
@@ -460,36 +637,34 @@ export default function ChatBox() {
             </svg>
           </button>
 
-          <h1 className="text-lg font-semibold text-gray-900">
-            {currentConvId ? conversations.find(conversation => conversation.id === currentConvId)?.title || 'Chat' : 'New chat'}
-          </h1>
+          <div className="min-w-0 flex-1">
+            <h1 className="truncate text-lg font-semibold text-gray-900">
+              {currentConvId ? currentConversation?.title || 'Chat' : 'New chat'}
+            </h1>
+            <div className="truncate text-xs text-gray-500">
+              Provider: {currentProviderLabel}
+            </div>
+          </div>
 
           <div className="flex items-center gap-1">
-            <button
-              onClick={openSettings}
-              className="rounded-lg p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-blue-600"
-              title="Settings"
-              aria-label="Settings"
-              type="button"
-            >
+            <button onClick={openAbout} className="rounded-lg p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700" title="About" aria-label="About" type="button">
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M12 19a7 7 0 100-14 7 7 0 000 14z" />
+              </svg>
+            </button>
+            <button onClick={openSettings} className="rounded-lg p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-blue-600" title="Settings" aria-label="Settings" type="button">
               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.89 3.31.877 2.42 2.42a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.89 1.543-.877 3.31-2.42 2.42a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.89-3.31-.877-2.42-2.42a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.89-1.543.877-3.31 2.42-2.42.996.574 2.25.055 2.572-1.065z" />
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
             </button>
-            <button
-              onClick={clearMessages}
-              className="rounded-lg p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-red-500"
-              title="Clear conversation"
-              aria-label="Clear conversation"
-              type="button"
-            >
+            <button onClick={clearMessages} className="rounded-lg p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-red-500" title="Clear conversation" aria-label="Clear conversation" type="button">
               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
               </svg>
             </button>
           </div>
-        </div>
+        </header>
 
         <MessageList
           messages={messages}
@@ -500,7 +675,15 @@ export default function ChatBox() {
           onEditResend={handleEditResend}
         />
 
-        {error && (
+        {errorState && errorState.kind !== 'abort' && (
+          <div className={`mx-4 mb-2 rounded-lg border px-4 py-2 ${
+            errorState.recoverable ? 'border-amber-200 bg-amber-50' : 'border-red-200 bg-red-50'
+          }`}>
+            <p className="text-sm text-gray-800">{errorState.message}</p>
+          </div>
+        )}
+
+        {error && !errorState && (
           <div className="mx-4 mb-2 rounded-lg border border-red-200 bg-red-50 px-4 py-2">
             <p className="text-sm text-red-600">{error}</p>
           </div>
@@ -522,13 +705,7 @@ export default function ChatBox() {
           <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg bg-white p-5 shadow-xl">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-base font-semibold text-gray-900">Provider presets</h2>
-              <button
-                onClick={() => setShowSettings(false)}
-                className="rounded p-1 text-gray-500 hover:bg-gray-100"
-                title="Close"
-                aria-label="Close settings"
-                type="button"
-              >
+              <button onClick={() => setShowSettings(false)} className="rounded p-1 text-gray-500 hover:bg-gray-100" title="Close" aria-label="Close settings" type="button">
                 <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
@@ -539,6 +716,12 @@ export default function ChatBox() {
               Active: {activeProviderPreset ? activeProviderPreset.name : 'Environment defaults'}
               <div className="mt-1 text-xs text-gray-500">
                 Attachments: {activeProviderPreset ? (activeProviderPreset.supportsAttachments ? 'enabled by active preset' : 'disabled by active preset') : 'controlled by environment defaults'}
+              </div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button onClick={checkProviderPreset} className="rounded-md bg-gray-100 px-3 py-2 text-xs text-gray-700 hover:bg-gray-200 disabled:opacity-50" disabled={providerCheckInFlight} type="button">
+                  {providerCheckInFlight ? 'Checking...' : 'Check connectivity'}
+                </button>
+                {providerCheckState && <span className="text-xs text-gray-600">{providerCheckState}</span>}
               </div>
             </div>
 
@@ -560,36 +743,16 @@ export default function ChatBox() {
                       {preset.model || 'env model'} at {preset.baseUrl || 'env base URL'}
                     </div>
                   </div>
-                  <button
-                    onClick={() => openEditProviderPreset(preset)}
-                    className="rounded px-2 py-1 text-xs text-gray-600 hover:bg-gray-100"
-                    type="button"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => deleteProviderPreset(preset.id)}
-                    className="rounded px-2 py-1 text-xs text-red-600 hover:bg-red-50"
-                    type="button"
-                  >
-                    Delete
-                  </button>
+                  <button onClick={() => openEditProviderPreset(preset)} className="rounded px-2 py-1 text-xs text-gray-600 hover:bg-gray-100" type="button">Edit</button>
+                  <button onClick={() => deleteProviderPreset(preset.id)} className="rounded px-2 py-1 text-xs text-red-600 hover:bg-red-50" type="button">Delete</button>
                 </div>
               ))}
             </div>
 
             <div className="mb-4 rounded-md border border-gray-200 p-3">
               <div className="mb-3 flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-gray-900">
-                  {presetDraft.id ? 'Edit preset' : 'New preset'}
-                </h3>
-                <button
-                  onClick={openNewProviderPreset}
-                  className="rounded px-2 py-1 text-xs text-blue-600 hover:bg-blue-50"
-                  type="button"
-                >
-                  Clear
-                </button>
+                <h3 className="text-sm font-semibold text-gray-900">{presetDraft.id ? 'Edit preset' : 'New preset'}</h3>
+                <button onClick={() => setPresetDraft(EMPTY_PROVIDER_PRESET_FORM)} className="rounded px-2 py-1 text-xs text-blue-600 hover:bg-blue-50" type="button">Clear</button>
               </div>
 
               <label className="mb-3 block">
@@ -627,6 +790,8 @@ export default function ChatBox() {
                 />
                 Enable image attachment passthrough
               </label>
+
+              {providerError && <p className="text-sm text-red-600">{providerError}</p>}
             </div>
 
             <p className="mb-4 text-xs text-gray-500">
@@ -634,21 +799,37 @@ export default function ChatBox() {
             </p>
 
             <div className="flex justify-end gap-2">
-              <button
-                onClick={() => setShowSettings(false)}
-                className="rounded-md px-3 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                type="button"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={saveProviderPreset}
-                className="rounded-md bg-blue-500 px-3 py-2 text-sm text-white hover:bg-blue-600"
-                type="button"
-              >
-                Save preset
+              <button onClick={() => setShowSettings(false)} className="rounded-md px-3 py-2 text-sm text-gray-700 hover:bg-gray-100" type="button">Cancel</button>
+              <button onClick={saveProviderPreset} className="rounded-md bg-blue-500 px-3 py-2 text-sm text-white hover:bg-blue-600" type="button">Save preset</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showAbout && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4">
+          <div className="w-full max-w-md rounded-lg bg-white p-5 shadow-xl">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-base font-semibold text-gray-900">About</h2>
+              <button onClick={() => setShowAbout(false)} className="rounded p-1 text-gray-500 hover:bg-gray-100" title="Close" aria-label="Close about" type="button">
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
               </button>
             </div>
+
+            <div className="space-y-2 text-sm text-gray-700">
+              <div>Version: {aboutInfo?.version ?? 'Unavailable'}</div>
+              <div>Platform: {aboutInfo?.platform ?? 'Unavailable'}</div>
+              <div>Conversation store: localStorage</div>
+              <div className="break-all">Log path: {diagnosticsInfo?.logsPath ?? 'Unavailable'}</div>
+              <div>Startup: {formatDiagnostic(diagnosticsInfo?.lastStartupDiagnostic)}</div>
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button onClick={exportLogs} className="rounded-md bg-gray-100 px-3 py-2 text-sm text-gray-700 hover:bg-gray-200" type="button">Export logs</button>
+              <button onClick={openLogs} className="rounded-md bg-gray-100 px-3 py-2 text-sm text-gray-700 hover:bg-gray-200" type="button">Open logs</button>
+            </div>
+            {logActionStatus && <p className="mt-3 break-all text-xs text-gray-500">{logActionStatus}</p>}
           </div>
         </div>
       )}
@@ -657,16 +838,8 @@ export default function ChatBox() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4">
           <div className="w-full max-w-lg rounded-lg bg-white p-5 shadow-xl">
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-base font-semibold text-gray-900">
-                {templateDraft.id ? 'Edit template' : 'New template'}
-              </h2>
-              <button
-                onClick={() => setShowTemplateEditor(false)}
-                className="rounded p-1 text-gray-500 hover:bg-gray-100"
-                title="Close"
-                aria-label="Close template editor"
-                type="button"
-              >
+              <h2 className="text-base font-semibold text-gray-900">{templateDraft.id ? 'Edit template' : 'New template'}</h2>
+              <button onClick={() => setShowTemplateEditor(false)} className="rounded p-1 text-gray-500 hover:bg-gray-100" title="Close" aria-label="Close template editor" type="button">
                 <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
@@ -692,234 +865,41 @@ export default function ChatBox() {
             </label>
 
             <div className="flex justify-end gap-2">
-              <button
-                onClick={() => setShowTemplateEditor(false)}
-                className="rounded-md px-3 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                type="button"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={saveTemplate}
-                disabled={!templateDraft.content.trim()}
-                className="rounded-md bg-blue-500 px-3 py-2 text-sm text-white hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
-                type="button"
-              >
-                Save
-              </button>
+              <button onClick={() => setShowTemplateEditor(false)} className="rounded-md px-3 py-2 text-sm text-gray-700 hover:bg-gray-100" type="button">Cancel</button>
+              <button onClick={saveTemplate} disabled={!templateDraft.content.trim()} className="rounded-md bg-blue-500 px-3 py-2 text-sm text-white hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-50" type="button">Save</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {renameConversationId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4">
+          <div className="w-full max-w-sm rounded-lg bg-white p-5 shadow-xl">
+            <h2 className="mb-3 text-base font-semibold text-gray-900">Rename conversation</h2>
+            <input
+              value={renameDraft}
+              onChange={event => setRenameDraft(event.target.value)}
+              onKeyDown={event => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  handleSaveRename();
+                }
+                if (event.key === 'Escape') {
+                  setRenameConversationId(null);
+                  setRenameDraft('');
+                }
+              }}
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <div className="mt-4 flex justify-end gap-2">
+              <button onClick={() => { setRenameConversationId(null); setRenameDraft(''); }} className="rounded-md px-3 py-2 text-sm text-gray-700 hover:bg-gray-100" type="button">Cancel</button>
+              <button onClick={handleSaveRename} className="rounded-md bg-blue-500 px-3 py-2 text-sm text-white hover:bg-blue-600" type="button">Save</button>
             </div>
           </div>
         </div>
       )}
     </div>
   );
-}
-
-function loadStoredConversations(): Conversation[] {
-  if (typeof window === 'undefined') return [];
-
-  try {
-    const saved = window.localStorage.getItem(CONVERSATIONS_KEY);
-    const parsed: unknown = saved ? JSON.parse(saved) : [];
-    return Array.isArray(parsed) ? parsed as Conversation[] : [];
-  } catch (error) {
-    console.error('Failed to load conversations:', error);
-    return [];
-  }
-}
-
-function saveConversations(conversations: Conversation[]) {
-  if (typeof window === 'undefined') return;
-  window.localStorage.setItem(CONVERSATIONS_KEY, JSON.stringify(conversations));
-}
-
-function loadStoredActiveConversationId(): string | null {
-  if (typeof window === 'undefined') return null;
-
-  try {
-    return window.localStorage.getItem(ACTIVE_CONVERSATION_KEY);
-  } catch {
-    return null;
-  }
-}
-
-function loadInitialConversationId(conversations = loadStoredConversations()): string | null {
-  const activeId = loadStoredActiveConversationId();
-  return conversations.some(conversation => conversation.id === activeId) ? activeId : conversations[0]?.id ?? null;
-}
-
-function saveActiveConversationId(conversationId: string | null) {
-  if (typeof window === 'undefined') return;
-
-  if (conversationId) {
-    window.localStorage.setItem(ACTIVE_CONVERSATION_KEY, conversationId);
-  } else {
-    window.localStorage.removeItem(ACTIVE_CONVERSATION_KEY);
-  }
-}
-
-function loadDraftForConversation(conversationId: string | null): string {
-  if (typeof window === 'undefined') return '';
-
-  try {
-    if (!conversationId) {
-      return window.localStorage.getItem(NEW_CONVERSATION_DRAFT_KEY) ?? '';
-    }
-
-    return loadConversationDrafts()[conversationId] ?? '';
-  } catch {
-    return '';
-  }
-}
-
-function saveDraftForConversation(conversationId: string | null, draft: string) {
-  if (typeof window === 'undefined') return;
-
-  if (!conversationId) {
-    if (draft) {
-      window.localStorage.setItem(NEW_CONVERSATION_DRAFT_KEY, draft);
-    } else {
-      window.localStorage.removeItem(NEW_CONVERSATION_DRAFT_KEY);
-    }
-    return;
-  }
-
-  const drafts = loadConversationDrafts();
-  if (draft) {
-    drafts[conversationId] = draft;
-  } else {
-    delete drafts[conversationId];
-  }
-  saveConversationDrafts(drafts);
-}
-
-function clearDraftForConversation(conversationId: string | null) {
-  saveDraftForConversation(conversationId, '');
-}
-
-function deleteDraftForConversation(conversationId: string) {
-  const drafts = loadConversationDrafts();
-  delete drafts[conversationId];
-  saveConversationDrafts(drafts);
-}
-
-function loadConversationDrafts(): Record<string, string> {
-  if (typeof window === 'undefined') return {};
-
-  try {
-    const saved = window.localStorage.getItem(CONVERSATION_DRAFTS_KEY);
-    const parsed: unknown = saved ? JSON.parse(saved) : {};
-
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      return {};
-    }
-
-    return Object.fromEntries(
-      Object.entries(parsed).filter(([, value]) => typeof value === 'string')
-    ) as Record<string, string>;
-  } catch {
-    return {};
-  }
-}
-
-function saveConversationDrafts(drafts: Record<string, string>) {
-  if (typeof window === 'undefined') return;
-
-  if (Object.keys(drafts).length > 0) {
-    window.localStorage.setItem(CONVERSATION_DRAFTS_KEY, JSON.stringify(drafts));
-  } else {
-    window.localStorage.removeItem(CONVERSATION_DRAFTS_KEY);
-  }
-}
-
-function loadStoredPromptTemplates(): PromptTemplate[] {
-  if (typeof window === 'undefined') return [];
-
-  try {
-    const saved = window.localStorage.getItem(PROMPT_TEMPLATES_KEY);
-    const parsed: unknown = saved ? JSON.parse(saved) : [];
-    if (!Array.isArray(parsed)) return [];
-
-    return parsed.filter(isPromptTemplate);
-  } catch {
-    return [];
-  }
-}
-
-function savePromptTemplates(templates: PromptTemplate[]) {
-  if (typeof window === 'undefined') return;
-  window.localStorage.setItem(PROMPT_TEMPLATES_KEY, JSON.stringify(templates));
-}
-
-function loadStoredProviderPresets(): ProviderPreset[] {
-  if (typeof window === 'undefined') return [];
-
-  try {
-    const saved = window.localStorage.getItem(PROVIDER_PRESETS_KEY);
-    if (saved) {
-      const parsed: unknown = JSON.parse(saved);
-      if (Array.isArray(parsed)) {
-        return parsed.filter(isProviderPreset);
-      }
-      return [];
-    }
-
-    return migrateLegacyProviderSettings();
-  } catch {
-    return [];
-  }
-}
-
-function saveProviderPresets(presets: ProviderPreset[]) {
-  if (typeof window === 'undefined') return;
-  window.localStorage.setItem(PROVIDER_PRESETS_KEY, JSON.stringify(presets));
-}
-
-function loadActiveProviderPresetId(presets = loadStoredProviderPresets()): string | null {
-  if (typeof window === 'undefined') return presets[0]?.id ?? null;
-
-  const saved = window.localStorage.getItem(ACTIVE_PROVIDER_PRESET_KEY);
-  return presets.some(preset => preset.id === saved) ? saved : presets[0]?.id ?? null;
-}
-
-function saveActiveProviderPresetId(presetId: string | null) {
-  if (typeof window === 'undefined') return;
-
-  if (presetId) {
-    window.localStorage.setItem(ACTIVE_PROVIDER_PRESET_KEY, presetId);
-  } else {
-    window.localStorage.removeItem(ACTIVE_PROVIDER_PRESET_KEY);
-  }
-}
-
-async function readActiveProviderSettings(): Promise<ProviderSettings | undefined> {
-  if (typeof window === 'undefined') return undefined;
-
-  const presets = loadStoredProviderPresets();
-  const activePresetId = loadActiveProviderPresetId(presets);
-  const activePreset = presets.find(preset => preset.id === activePresetId);
-  if (activePreset) {
-    return emptyToUndefined(normalizeProviderSettings(activePreset));
-  }
-
-  return readStoredProviderSettings();
-}
-
-function migrateLegacyProviderSettings(): ProviderPreset[] {
-  const legacySettings = readLegacyProviderSettings();
-  if (!legacySettings) return [];
-
-  const preset: ProviderPreset = {
-    id: createId(),
-    name: legacySettings.model || 'Legacy provider preset',
-    ...legacySettings,
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-  };
-  window.localStorage.removeItem(PROVIDER_SETTINGS_KEY);
-  saveProviderPresets([preset]);
-  saveActiveProviderPresetId(preset.id);
-  return [preset];
 }
 
 function createConversationTitle(messages: Message[]): string {
@@ -933,101 +913,11 @@ function createTemplateTitle(content: string): string {
   return firstLine.length > 40 ? `${firstLine.slice(0, 40)}...` : firstLine;
 }
 
-function createId(): string {
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-}
-
-function isPromptTemplate(value: unknown): value is PromptTemplate {
-  if (!value || typeof value !== 'object') return false;
-  const template = value as Partial<PromptTemplate>;
-  return (
-    typeof template.id === 'string' &&
-    typeof template.title === 'string' &&
-    typeof template.content === 'string' &&
-    typeof template.createdAt === 'number' &&
-    typeof template.updatedAt === 'number'
-  );
-}
-
-function isProviderPreset(value: unknown): value is ProviderPreset {
-  if (!value || typeof value !== 'object') return false;
-  const preset = value as Partial<ProviderPreset>;
-  return (
-    typeof preset.id === 'string' &&
-    typeof preset.name === 'string' &&
-    typeof preset.createdAt === 'number' &&
-    typeof preset.updatedAt === 'number' &&
-    (preset.baseUrl === undefined || typeof preset.baseUrl === 'string') &&
-    (preset.model === undefined || typeof preset.model === 'string') &&
-    (preset.supportsAttachments === undefined || typeof preset.supportsAttachments === 'boolean')
-  );
-}
-
-async function readStoredProviderSettings(): Promise<ProviderSettings | undefined> {
-  if (typeof window === 'undefined') return undefined;
-
-  if (window.aiChat?.getSettings) {
-    return emptyToUndefined(normalizeProviderSettings(await window.aiChat.getSettings()));
+function formatDiagnostic(value: unknown): string {
+  if (!value) return 'Unavailable';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'object' && 'status' in value) {
+    return String((value as { status?: unknown }).status ?? 'Unavailable');
   }
-
-  try {
-    const saved = window.localStorage.getItem(PROVIDER_SETTINGS_KEY);
-    if (!saved) return undefined;
-
-    const stored = JSON.parse(saved) as StoredProviderSettings;
-    if (isLegacyDefaultProviderSettings(stored)) {
-      return undefined;
-    }
-
-    return emptyToUndefined(normalizeProviderSettings(stored));
-  } catch {
-    return undefined;
-  }
-}
-
-function readLegacyProviderSettings(): ProviderSettings | undefined {
-  if (typeof window === 'undefined') return undefined;
-
-  try {
-    const saved = window.localStorage.getItem(PROVIDER_SETTINGS_KEY);
-    if (!saved) return undefined;
-
-    const stored = JSON.parse(saved) as StoredProviderSettings;
-    if (isLegacyDefaultProviderSettings(stored)) {
-      return undefined;
-    }
-
-    return emptyToUndefined(normalizeProviderSettings(stored));
-  } catch {
-    return undefined;
-  }
-}
-
-function normalizeProviderSettings(settings?: ProviderSettings): ProviderSettings {
-  const baseUrl = settings?.baseUrl?.trim();
-  const model = settings?.model?.trim();
-
-  return {
-    ...(baseUrl ? { baseUrl } : {}),
-    ...(model ? { model } : {}),
-    ...(typeof settings?.supportsAttachments === 'boolean'
-      ? { supportsAttachments: settings.supportsAttachments }
-      : {}),
-  };
-}
-
-function emptyToUndefined(settings: ProviderSettings): ProviderSettings | undefined {
-  const hasBaseUrl = Boolean(settings.baseUrl);
-  const hasModel = Boolean(settings.model);
-  const hasAttachmentOverride = typeof settings.supportsAttachments === 'boolean';
-  return hasBaseUrl || hasModel || hasAttachmentOverride ? settings : undefined;
-}
-
-function isLegacyDefaultProviderSettings(settings: StoredProviderSettings): boolean {
-  return (
-    settings.version === undefined &&
-    settings.baseUrl === LEGACY_DEFAULT_BASE_URL &&
-    settings.model === LEGACY_DEFAULT_MODEL &&
-    settings.supportsAttachments === false
-  );
+  return 'Available';
 }

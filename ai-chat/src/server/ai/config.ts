@@ -1,10 +1,12 @@
-import { ProviderSettings } from '@/types/chat';
+import { normalizeProviderCapabilities, normalizeProviderSettings, validateProviderSettings } from '@/lib/storage';
+import { ProviderCapabilities, ProviderSettings } from '@/types/chat';
 
 export interface ProviderConfig {
   apiKey: string;
   baseUrl: string;
   model: string;
   supportsAttachments: boolean;
+  capabilities: ProviderCapabilities;
 }
 
 export class ProviderError extends Error {
@@ -21,14 +23,29 @@ export function getProviderConfig(settings?: ProviderSettings): ProviderConfig {
   const apiKey = process.env.AI_API_KEY || process.env.OPENAI_API_KEY;
 
   if (!apiKey) {
-    throw new ProviderError('未配置 API Key，请在 .env.local 中设置 AI_API_KEY', 500);
+    throw new ProviderError('Missing API key. Set AI_API_KEY in .env.local.', 500);
   }
+
+  const validated = validateProviderSettings(settings);
+  if (!validated.ok) {
+    throw new ProviderError(validated.message || 'Provider settings are invalid.', 400);
+  }
+
+  const normalized = normalizeProviderSettings(validated.settings);
+  const normalizedCapabilities = normalizeProviderCapabilities(normalized);
+  const envSupportsAttachments = process.env.AI_SUPPORTS_ATTACHMENTS === 'true';
+  const supportsAttachments = normalized.supportsAttachments ?? envSupportsAttachments;
 
   return {
     apiKey,
-    baseUrl: normalizeBaseUrl(settings?.baseUrl || process.env.AI_API_BASE_URL || 'https://api.openai.com/v1'),
-    model: settings?.model || process.env.AI_MODEL || 'gpt-3.5-turbo',
-    supportsAttachments: settings?.supportsAttachments ?? process.env.AI_SUPPORTS_ATTACHMENTS === 'true',
+    baseUrl: normalizeBaseUrl(normalized.baseUrl || process.env.AI_API_BASE_URL || 'https://api.openai.com/v1'),
+    model: normalized.model || process.env.AI_MODEL || 'gpt-3.5-turbo',
+    supportsAttachments,
+    capabilities: {
+      ...normalizedCapabilities,
+      supportsAttachments,
+      supportsImages: normalizedCapabilities.supportsImages ?? supportsAttachments,
+    },
   };
 }
 
@@ -36,7 +53,7 @@ function normalizeBaseUrl(baseUrl: string): string {
   const trimmed = baseUrl.trim().replace(/\/+$/, '');
 
   if (!trimmed) {
-    throw new ProviderError('AI_API_BASE_URL 不能为空', 400);
+    throw new ProviderError('AI_API_BASE_URL cannot be empty', 400);
   }
 
   try {
@@ -46,13 +63,13 @@ function normalizeBaseUrl(baseUrl: string): string {
     }
     return url.toString().replace(/\/+$/, '');
   } catch {
-    throw new ProviderError('AI_API_BASE_URL 不是有效的 HTTP 地址', 400);
+    throw new ProviderError('AI_API_BASE_URL must be a valid HTTP URL', 400);
   }
 }
 
 export function sanitizeProviderMessage(message: unknown): string {
   if (typeof message !== 'string' || !message.trim()) {
-    return 'AI 服务请求失败';
+    return 'AI service request failed';
   }
 
   return message

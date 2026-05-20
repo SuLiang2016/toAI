@@ -30,7 +30,7 @@ export async function createOpenAICompatibleStream(request: ChatRequest): Promis
   }
 
   if (!upstream.body) {
-    throw new ProviderError('AI 服务返回了空响应流', 502);
+    throw new ProviderError('AI service returned an empty response stream', 502);
   }
 
   return new Response(upstream.body, {
@@ -52,7 +52,7 @@ function mapMessages(messages: ChatRequestMessage[], supportsAttachments: boolea
     }
 
     if (!supportsAttachments) {
-      throw new ProviderError('当前模型未启用附件转发，请移除附件后重试或启用支持附件的模型配置', 400);
+      throw new ProviderError('The active model does not support attachments. Remove attachments or enable an attachment-capable preset.', 400);
     }
 
     const content: OpenAIContentPart[] = [];
@@ -62,7 +62,7 @@ function mapMessages(messages: ChatRequestMessage[], supportsAttachments: boolea
 
     for (const attachment of message.attachments) {
       if (attachment.type !== 'image' || !attachment.data) {
-        throw new ProviderError('当前附件协议仅支持图片直传；其他文件请先转为文本摘要', 400);
+        throw new ProviderError('This attachment flow only supports direct image uploads. Convert other files to text first.', 400);
       }
 
       content.push({
