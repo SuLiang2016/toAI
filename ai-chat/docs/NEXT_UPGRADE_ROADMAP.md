@@ -269,6 +269,28 @@ Known gaps:
 - Provider connectivity checks require a valid local `AI_API_KEY` or `OPENAI_API_KEY` to prove reachability against a real provider.
 - Electron runtime smoke beyond packaging remains manual because no new desktop automation dependency was introduced in this batch.
 
+Execution date: 2026-05-20.
+
+Maintainability and verification foundation batch:
+
+- `ChatBox.tsx` was decomposed by UI surface into `src/components/chatbox/` boundaries for the sidebar, provider preset dialog, About dialog, template editor dialog, and rename dialog.
+- `useChat.ts` moved reusable client submission helpers into `src/lib/chat-client.ts` so the hook focuses more on React state/ref orchestration.
+- `pnpm test` now runs built-in Node behavior tests through `scripts/run-behavior-tests.mjs` before the existing contract checker, without adding dependencies.
+- Behavior tests were added for `src/lib/streaming.ts`, `src/lib/storage.ts`, and `src/server/ai/config.ts`.
+- `docs/NEXT_OPTIMIZATION_DIRECTIONS.md` and `docs/NEXT_EXECUTION_PLAN.md` were refreshed so they no longer describe already-completed reliability/provider/desktop work as future backlog.
+
+Fresh verification results:
+
+- `pnpm lint`: passed.
+- `pnpm typecheck`: passed.
+- `pnpm test`: passed with 16 behavior tests plus `upgrade verification checks passed`.
+- `pnpm build`: passed; routes include `/`, `/api/chat`, and `/api/provider/check`.
+
+Known gaps after this batch:
+
+- Manual smoke checks were not rerun inside this session because no browser automation pass was requested for the refactor-only UI extraction.
+- `pnpm electron-build` was not rerun because this batch did not change Electron main/preload/build behavior.
+
 ## ADR
 
 Decision: run the next upgrade as a reliability-first roadmap, then layer UX and Electron improvements after storage, stream, provider, and verification boundaries are stronger.

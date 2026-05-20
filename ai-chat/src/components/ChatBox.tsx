@@ -3,14 +3,20 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import MessageList from './MessageList';
 import InputArea from './InputArea';
+import AboutModal from './chatbox/AboutModal';
+import ChatSidebar from './chatbox/ChatSidebar';
+import ProviderPresetsModal from './chatbox/ProviderPresetsModal';
+import RenameConversationModal from './chatbox/RenameConversationModal';
+import TemplateEditorModal from './chatbox/TemplateEditorModal';
+import { createConversationTitle, createTemplateTitle } from './chatbox/chatbox-utils';
+import type {
+  AboutInfo,
+  DiagnosticsInfo,
+  ProviderPresetFormDraft,
+  TemplateFormDraft,
+} from './chatbox/types';
 import { useChat } from '@/hooks/useChat';
 import {
-  ACTIVE_PROVIDER_PRESET_KEY,
-  CONVERSATION_DRAFTS_KEY,
-  CONVERSATIONS_KEY,
-  PROMPT_TEMPLATES_KEY,
-  PROVIDER_PRESETS_KEY,
-  PROVIDER_SETTINGS_KEY,
   clearDraftForConversation,
   createProviderSnapshot,
   createStorageId,
@@ -32,31 +38,7 @@ import {
   saveProviderPresets,
   validateProviderSettings,
 } from '@/lib/storage';
-import { Conversation, Message, PromptTemplate, ProviderPreset, ProviderSnapshot } from '@/types/chat';
-
-interface TemplateFormDraft {
-  id: string | null;
-  title: string;
-  content: string;
-}
-
-interface ProviderPresetFormDraft {
-  id: string | null;
-  name: string;
-  baseUrl: string;
-  model: string;
-  supportsAttachments: boolean;
-}
-
-interface AboutInfo {
-  version: string;
-  platform: string;
-}
-
-interface DiagnosticsInfo {
-  logsPath: string;
-  lastStartupDiagnostic: unknown;
-}
+import type { Conversation, Message, PromptTemplate, ProviderPreset, ProviderSnapshot } from '@/types/chat';
 
 const EMPTY_TEMPLATE_FORM: TemplateFormDraft = {
   id: null,
@@ -504,123 +486,27 @@ export default function ChatBox() {
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50">
       {showSidebar && (
-        <aside className="flex w-80 max-w-full flex-col border-r border-gray-200 bg-white">
-          <div className="border-b border-gray-200 p-4">
-            <button
-              onClick={handleNewChat}
-              className="w-full rounded-lg bg-blue-500 px-4 py-2 text-white transition-colors hover:bg-blue-600"
-              type="button"
-            >
-              + New chat
-            </button>
-            <label className="mt-3 block">
-              <span className="sr-only">Search conversations</span>
-              <input
-                value={searchQuery}
-                onChange={event => setSearchQuery(event.target.value)}
-                placeholder="Search conversations"
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </label>
-          </div>
-
-          <div className="flex-1 overflow-y-auto">
-            {filteredConversations.length > 0 ? (
-              filteredConversations.map(conversation => (
-                <div
-                  key={conversation.id}
-                  className={`group flex w-full items-center gap-2 border-b border-gray-100 px-3 py-3 hover:bg-gray-100 ${
-                    currentConvId === conversation.id ? 'border-l-4 border-l-blue-500 bg-blue-50' : ''
-                  }`}
-                >
-                  <button
-                    ref={node => {
-                      conversationButtonRefs.current[conversation.id] = node;
-                    }}
-                    onClick={() => handleSelectConversation(conversation)}
-                    onKeyDown={event => handleConversationKeyDown(event, conversation.id)}
-                    className="min-w-0 flex-1 text-left"
-                    type="button"
-                  >
-                    <div className="truncate text-sm font-medium text-gray-900">{conversation.title}</div>
-                    <div className="mt-1 text-xs text-gray-500">{new Date(conversation.updatedAt).toLocaleDateString()}</div>
-                  </button>
-                  <button
-                    onClick={() => handleStartRename(conversation)}
-                    className="rounded p-1 text-gray-400 opacity-0 transition hover:bg-gray-100 hover:text-gray-700 group-hover:opacity-100"
-                    title="Rename conversation"
-                    aria-label={`Rename conversation ${conversation.title}`}
-                    type="button"
-                  >
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5h2M12 5v14m6-7H6" />
-                    </svg>
-                  </button>
-                  <button
-                    onClick={() => handleDeleteConversation(conversation.id)}
-                    className="rounded p-1 text-gray-400 opacity-0 transition hover:bg-red-50 hover:text-red-600 group-hover:opacity-100"
-                    title="Delete conversation"
-                    aria-label={`Delete conversation ${conversation.title}`}
-                    type="button"
-                  >
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 7h12M10 11v6m4-6v6m1-10V5a1 1 0 00-1-1h-4a1 1 0 00-1 1v2m-2 0l1 12a2 2 0 002 2h4a2 2 0 002-2l1-12" />
-                    </svg>
-                  </button>
-                </div>
-              ))
-            ) : (
-              <div className="px-4 py-8 text-sm text-gray-500">
-                No matching conversations
-              </div>
-            )}
-
-            <div className="border-t border-gray-200 px-3 py-3">
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Templates</h2>
-                <button onClick={openNewTemplate} className="rounded px-2 py-1 text-xs text-blue-600 hover:bg-blue-50" type="button">Add</button>
-              </div>
-
-              {promptTemplates.length > 0 ? (
-                <div className="space-y-2">
-                  {promptTemplates.map(template => (
-                    <div key={template.id} className="rounded-md border border-gray-200 p-2">
-                      <button
-                        onClick={() => insertTemplateIntoDraft(template)}
-                        className="block w-full text-left"
-                        title="Insert template"
-                        type="button"
-                      >
-                        <div className="truncate text-sm font-medium text-gray-900">{template.title}</div>
-                        <div className="mt-1 line-clamp-2 text-xs text-gray-500">{template.content}</div>
-                      </button>
-                      <div className="mt-2 flex justify-end gap-1">
-                        <button onClick={() => openEditTemplate(template)} className="rounded px-2 py-1 text-xs text-gray-600 hover:bg-gray-100" type="button">Edit</button>
-                        <button onClick={() => deleteTemplate(template.id)} className="rounded px-2 py-1 text-xs text-red-600 hover:bg-red-50" type="button">Delete</button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="rounded-md border border-dashed border-gray-200 px-3 py-2 text-xs text-gray-500">
-                  No templates yet
-                </div>
-              )}
-            </div>
-
-            <div className="border-t border-gray-200 px-3 py-3 text-xs text-gray-500">
-              <div className="flex items-center justify-between">
-                <span>{filteredConversations.length} conversations</span>
-                <button onClick={cleanDrafts} className="rounded px-2 py-1 text-xs text-gray-600 hover:bg-gray-100" type="button">
-                  Clean drafts
-                </button>
-              </div>
-              <div className="mt-2 break-all text-[11px] text-gray-400">
-                Keys: {CONVERSATIONS_KEY}, {CONVERSATION_DRAFTS_KEY}, {PROMPT_TEMPLATES_KEY}, {PROVIDER_PRESETS_KEY}, {ACTIVE_PROVIDER_PRESET_KEY}, {PROVIDER_SETTINGS_KEY}
-              </div>
-            </div>
-          </div>
-        </aside>
+        <ChatSidebar
+          conversations={conversations}
+          currentConvId={currentConvId}
+          filteredConversations={filteredConversations}
+          promptTemplates={promptTemplates}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          onNewChat={handleNewChat}
+          onSelectConversation={handleSelectConversation}
+          onConversationKeyDown={handleConversationKeyDown}
+          onSetConversationButtonRef={(conversationId, node) => {
+            conversationButtonRefs.current[conversationId] = node;
+          }}
+          onStartRename={handleStartRename}
+          onDeleteConversation={handleDeleteConversation}
+          onOpenNewTemplate={openNewTemplate}
+          onInsertTemplate={insertTemplateIntoDraft}
+          onOpenEditTemplate={openEditTemplate}
+          onDeleteTemplate={deleteTemplate}
+          onCleanDrafts={cleanDrafts}
+        />
       )}
 
       <div className="flex min-w-0 flex-1 flex-col">
@@ -701,223 +587,56 @@ export default function ChatBox() {
       </div>
 
       {showSettings && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4">
-          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg bg-white p-5 shadow-xl">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-base font-semibold text-gray-900">Provider presets</h2>
-              <button onClick={() => setShowSettings(false)} className="rounded p-1 text-gray-500 hover:bg-gray-100" title="Close" aria-label="Close settings" type="button">
-                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            <div className="mb-4 rounded-md border border-gray-200 p-3 text-sm text-gray-700">
-              Active: {activeProviderPreset ? activeProviderPreset.name : 'Environment defaults'}
-              <div className="mt-1 text-xs text-gray-500">
-                Attachments: {activeProviderPreset ? (activeProviderPreset.supportsAttachments ? 'enabled by active preset' : 'disabled by active preset') : 'controlled by environment defaults'}
-              </div>
-              <div className="mt-2 flex flex-wrap gap-2">
-                <button onClick={checkProviderPreset} className="rounded-md bg-gray-100 px-3 py-2 text-xs text-gray-700 hover:bg-gray-200 disabled:opacity-50" disabled={providerCheckInFlight} type="button">
-                  {providerCheckInFlight ? 'Checking...' : 'Check connectivity'}
-                </button>
-                {providerCheckState && <span className="text-xs text-gray-600">{providerCheckState}</span>}
-              </div>
-            </div>
-
-            <div className="mb-4 grid gap-2">
-              {providerPresets.map(preset => (
-                <div key={preset.id} className="flex flex-wrap items-center gap-2 rounded-md border border-gray-200 p-3">
-                  <button
-                    onClick={() => activateProviderPreset(preset.id)}
-                    className={`rounded px-2 py-1 text-xs ${
-                      preset.id === activeProviderPresetId ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-700'
-                    }`}
-                    type="button"
-                  >
-                    {preset.id === activeProviderPresetId ? 'Active' : 'Activate'}
-                  </button>
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-medium text-gray-900">{preset.name}</div>
-                    <div className="truncate text-xs text-gray-500">
-                      {preset.model || 'env model'} at {preset.baseUrl || 'env base URL'}
-                    </div>
-                  </div>
-                  <button onClick={() => openEditProviderPreset(preset)} className="rounded px-2 py-1 text-xs text-gray-600 hover:bg-gray-100" type="button">Edit</button>
-                  <button onClick={() => deleteProviderPreset(preset.id)} className="rounded px-2 py-1 text-xs text-red-600 hover:bg-red-50" type="button">Delete</button>
-                </div>
-              ))}
-            </div>
-
-            <div className="mb-4 rounded-md border border-gray-200 p-3">
-              <div className="mb-3 flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-gray-900">{presetDraft.id ? 'Edit preset' : 'New preset'}</h3>
-                <button onClick={() => setPresetDraft(EMPTY_PROVIDER_PRESET_FORM)} className="rounded px-2 py-1 text-xs text-blue-600 hover:bg-blue-50" type="button">Clear</button>
-              </div>
-
-              <label className="mb-3 block">
-                <span className="mb-1 block text-sm font-medium text-gray-700">Name</span>
-                <input
-                  value={presetDraft.name}
-                  onChange={event => setPresetDraft(previous => ({ ...previous, name: event.target.value }))}
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </label>
-
-              <label className="mb-3 block">
-                <span className="mb-1 block text-sm font-medium text-gray-700">API Base URL</span>
-                <input
-                  value={presetDraft.baseUrl}
-                  onChange={event => setPresetDraft(previous => ({ ...previous, baseUrl: event.target.value }))}
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </label>
-
-              <label className="mb-3 block">
-                <span className="mb-1 block text-sm font-medium text-gray-700">Model name</span>
-                <input
-                  value={presetDraft.model}
-                  onChange={event => setPresetDraft(previous => ({ ...previous, model: event.target.value }))}
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </label>
-
-              <label className="mb-3 flex items-center gap-2 text-sm text-gray-700">
-                <input
-                  type="checkbox"
-                  checked={presetDraft.supportsAttachments}
-                  onChange={event => setPresetDraft(previous => ({ ...previous, supportsAttachments: event.target.checked }))}
-                />
-                Enable image attachment passthrough
-              </label>
-
-              {providerError && <p className="text-sm text-red-600">{providerError}</p>}
-            </div>
-
-            <p className="mb-4 text-xs text-gray-500">
-              API keys still come from `.env.local`; presets store only provider URL, model, and capability hints.
-            </p>
-
-            <div className="flex justify-end gap-2">
-              <button onClick={() => setShowSettings(false)} className="rounded-md px-3 py-2 text-sm text-gray-700 hover:bg-gray-100" type="button">Cancel</button>
-              <button onClick={saveProviderPreset} className="rounded-md bg-blue-500 px-3 py-2 text-sm text-white hover:bg-blue-600" type="button">Save preset</button>
-            </div>
-          </div>
-        </div>
+        <ProviderPresetsModal
+          activeProviderPreset={activeProviderPreset}
+          activeProviderPresetId={activeProviderPresetId}
+          providerPresets={providerPresets}
+          presetDraft={presetDraft}
+          providerError={providerError}
+          providerCheckState={providerCheckState}
+          providerCheckInFlight={providerCheckInFlight}
+          onClose={() => setShowSettings(false)}
+          onCheckProviderPreset={checkProviderPreset}
+          onActivateProviderPreset={activateProviderPreset}
+          onOpenEditProviderPreset={openEditProviderPreset}
+          onDeleteProviderPreset={deleteProviderPreset}
+          onPresetDraftChange={setPresetDraft}
+          onResetPresetDraft={() => setPresetDraft(EMPTY_PROVIDER_PRESET_FORM)}
+          onSaveProviderPreset={saveProviderPreset}
+        />
       )}
 
       {showAbout && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4">
-          <div className="w-full max-w-md rounded-lg bg-white p-5 shadow-xl">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-base font-semibold text-gray-900">About</h2>
-              <button onClick={() => setShowAbout(false)} className="rounded p-1 text-gray-500 hover:bg-gray-100" title="Close" aria-label="Close about" type="button">
-                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            <div className="space-y-2 text-sm text-gray-700">
-              <div>Version: {aboutInfo?.version ?? 'Unavailable'}</div>
-              <div>Platform: {aboutInfo?.platform ?? 'Unavailable'}</div>
-              <div>Conversation store: localStorage</div>
-              <div className="break-all">Log path: {diagnosticsInfo?.logsPath ?? 'Unavailable'}</div>
-              <div>Startup: {formatDiagnostic(diagnosticsInfo?.lastStartupDiagnostic)}</div>
-            </div>
-            <div className="mt-4 flex flex-wrap gap-2">
-              <button onClick={exportLogs} className="rounded-md bg-gray-100 px-3 py-2 text-sm text-gray-700 hover:bg-gray-200" type="button">Export logs</button>
-              <button onClick={openLogs} className="rounded-md bg-gray-100 px-3 py-2 text-sm text-gray-700 hover:bg-gray-200" type="button">Open logs</button>
-            </div>
-            {logActionStatus && <p className="mt-3 break-all text-xs text-gray-500">{logActionStatus}</p>}
-          </div>
-        </div>
+        <AboutModal
+          aboutInfo={aboutInfo}
+          diagnosticsInfo={diagnosticsInfo}
+          logActionStatus={logActionStatus}
+          onClose={() => setShowAbout(false)}
+          onExportLogs={exportLogs}
+          onOpenLogs={openLogs}
+        />
       )}
 
       {showTemplateEditor && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4">
-          <div className="w-full max-w-lg rounded-lg bg-white p-5 shadow-xl">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-base font-semibold text-gray-900">{templateDraft.id ? 'Edit template' : 'New template'}</h2>
-              <button onClick={() => setShowTemplateEditor(false)} className="rounded p-1 text-gray-500 hover:bg-gray-100" title="Close" aria-label="Close template editor" type="button">
-                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            <label className="mb-3 block">
-              <span className="mb-1 block text-sm font-medium text-gray-700">Title</span>
-              <input
-                value={templateDraft.title}
-                onChange={event => setTemplateDraft(previous => ({ ...previous, title: event.target.value }))}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </label>
-
-            <label className="mb-4 block">
-              <span className="mb-1 block text-sm font-medium text-gray-700">Content</span>
-              <textarea
-                value={templateDraft.content}
-                onChange={event => setTemplateDraft(previous => ({ ...previous, content: event.target.value }))}
-                className="min-h-36 w-full resize-y rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </label>
-
-            <div className="flex justify-end gap-2">
-              <button onClick={() => setShowTemplateEditor(false)} className="rounded-md px-3 py-2 text-sm text-gray-700 hover:bg-gray-100" type="button">Cancel</button>
-              <button onClick={saveTemplate} disabled={!templateDraft.content.trim()} className="rounded-md bg-blue-500 px-3 py-2 text-sm text-white hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-50" type="button">Save</button>
-            </div>
-          </div>
-        </div>
+        <TemplateEditorModal
+          templateDraft={templateDraft}
+          onClose={() => setShowTemplateEditor(false)}
+          onTemplateDraftChange={setTemplateDraft}
+          onSaveTemplate={saveTemplate}
+        />
       )}
 
       {renameConversationId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4">
-          <div className="w-full max-w-sm rounded-lg bg-white p-5 shadow-xl">
-            <h2 className="mb-3 text-base font-semibold text-gray-900">Rename conversation</h2>
-            <input
-              value={renameDraft}
-              onChange={event => setRenameDraft(event.target.value)}
-              onKeyDown={event => {
-                if (event.key === 'Enter') {
-                  event.preventDefault();
-                  handleSaveRename();
-                }
-                if (event.key === 'Escape') {
-                  setRenameConversationId(null);
-                  setRenameDraft('');
-                }
-              }}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <div className="mt-4 flex justify-end gap-2">
-              <button onClick={() => { setRenameConversationId(null); setRenameDraft(''); }} className="rounded-md px-3 py-2 text-sm text-gray-700 hover:bg-gray-100" type="button">Cancel</button>
-              <button onClick={handleSaveRename} className="rounded-md bg-blue-500 px-3 py-2 text-sm text-white hover:bg-blue-600" type="button">Save</button>
-            </div>
-          </div>
-        </div>
+        <RenameConversationModal
+          renameDraft={renameDraft}
+          onRenameDraftChange={setRenameDraft}
+          onClose={() => {
+            setRenameConversationId(null);
+            setRenameDraft('');
+          }}
+          onSave={handleSaveRename}
+        />
       )}
     </div>
   );
-}
-
-function createConversationTitle(messages: Message[]): string {
-  const firstUserMessage = messages.find(message => message.role === 'user' && message.content.trim());
-  const title = firstUserMessage?.content.trim() || 'New chat';
-  return title.length > 30 ? `${title.slice(0, 30)}...` : title;
-}
-
-function createTemplateTitle(content: string): string {
-  const firstLine = content.split(/\r?\n/).find(line => line.trim())?.trim() || 'Untitled template';
-  return firstLine.length > 40 ? `${firstLine.slice(0, 40)}...` : firstLine;
-}
-
-function formatDiagnostic(value: unknown): string {
-  if (!value) return 'Unavailable';
-  if (typeof value === 'string') return value;
-  if (typeof value === 'object' && 'status' in value) {
-    return String((value as { status?: unknown }).status ?? 'Unavailable');
-  }
-  return 'Available';
 }

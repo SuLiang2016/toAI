@@ -12,7 +12,11 @@ const sanitizeSample = message => message
 
 const pkg = json('package.json');
 assert.equal(pkg.scripts.typecheck, 'tsc --noEmit', 'typecheck script must run tsc --noEmit');
-assert.equal(pkg.scripts.test, 'node scripts/verify-upgrade.mjs', 'test script must be explicit and non-placeholder');
+assert.equal(
+  pkg.scripts.test,
+  'node scripts/run-behavior-tests.mjs && node scripts/verify-upgrade.mjs',
+  'test script must run behavior tests before contract verification'
+);
 assert.match(pkg.scripts['electron-dev'], /pnpm dev/, 'electron-dev must use pnpm dev');
 assert.match(pkg.scripts['electron-build'], /pnpm build/, 'electron-build must use pnpm build');
 assert.deepEqual(
@@ -42,7 +46,17 @@ assert.deepEqual(
 
 assert.ok(existsSync('src/lib/streaming.ts'), 'pure streaming parser module must exist');
 assert.ok(existsSync('src/lib/storage.ts'), 'storage schema/migration helper module must exist');
+assert.ok(existsSync('src/lib/chat-client.ts'), 'chat client helper module must exist');
 assert.ok(existsSync('src/app/api/provider/check/route.ts'), 'provider connectivity check route must exist');
+assert.ok(existsSync('scripts/run-behavior-tests.mjs'), 'behavior test runner must exist');
+assert.ok(existsSync('scripts/streaming.behavior.test.mjs'), 'streaming behavior tests must exist');
+assert.ok(existsSync('scripts/storage.behavior.test.mjs'), 'storage behavior tests must exist');
+assert.ok(existsSync('scripts/provider-config.behavior.test.mjs'), 'provider config behavior tests must exist');
+assert.ok(existsSync('src/components/chatbox/ChatSidebar.tsx'), 'chat sidebar boundary must exist');
+assert.ok(existsSync('src/components/chatbox/ProviderPresetsModal.tsx'), 'provider presets modal boundary must exist');
+assert.ok(existsSync('src/components/chatbox/AboutModal.tsx'), 'about modal boundary must exist');
+assert.ok(existsSync('src/components/chatbox/TemplateEditorModal.tsx'), 'template editor modal boundary must exist');
+assert.ok(existsSync('src/components/chatbox/RenameConversationModal.tsx'), 'rename conversation modal boundary must exist');
 
 const chatTypes = text('src/types/chat.ts');
 assert.match(chatTypes, /export type MessageStatus/, 'MessageStatus type must distinguish partial/aborted/error output');
@@ -73,9 +87,11 @@ assert.match(storage, /migrateLegacyProviderSettings/, 'storage helpers must mig
 assert.match(storage, /validateProviderSettings/, 'storage helpers must validate provider settings');
 assert.match(storage, /createProviderSnapshot/, 'storage helpers must create per-conversation provider snapshots');
 assert.match(storage, /pruneConversationDrafts/, 'storage helpers must clean stale drafts');
+assert.match(storage, /status: message\.status \?\? 'complete'/, 'storage helpers must preserve explicit message status while defaulting legacy records');
 
 const hook = text('src/hooks/useChat.ts');
 assert.match(hook, /consumeSseBuffer/, 'useChat must use pure stream parser');
+assert.match(hook, /@\/lib\/chat-client/, 'useChat must delegate client helpers to chat-client');
 assert.match(hook, /validateProviderSettings/, 'useChat must validate provider settings before send');
 assert.match(hook, /errorState/, 'useChat must expose structured error state');
 assert.match(hook, /kind: 'abort'/, 'useChat must distinguish user abort');
@@ -84,8 +100,10 @@ assert.match(hook, /upstream_error/, 'useChat must distinguish upstream errors')
 assert.match(hook, /validation_error/, 'useChat must distinguish validation errors');
 assert.match(hook, /status: 'streaming'/, 'useChat must mark streaming assistant messages');
 assert.match(hook, /'partial'/, 'useChat must preserve partial output state');
-assert.match(hook, /sanitizeClientError/, 'useChat must sanitize displayed API errors');
-assert.match(hook, /\[local path\]/, 'useChat must mask local paths in displayed errors');
+
+const chatClient = text('src/lib/chat-client.ts');
+assert.match(chatClient, /sanitizeClientError/, 'chat client helpers must sanitize displayed API errors');
+assert.match(chatClient, /\[local path\]/, 'chat client helpers must mask local paths in displayed errors');
 
 const providerConfig = text('src/server/ai/config.ts');
 assert.match(providerConfig, /validateProviderSettings/, 'provider config must validate settings server-side');
@@ -128,6 +146,11 @@ assert.match(inputArea, /slashRange/, 'InputArea must track slash command ranges
 assert.match(inputArea, /ArrowDown/, 'InputArea must support template picker keyboard navigation');
 
 const chatBox = text('src/components/ChatBox.tsx');
+assert.match(chatBox, /ChatSidebar/, 'ChatBox must compose an extracted sidebar surface');
+assert.match(chatBox, /ProviderPresetsModal/, 'ChatBox must compose an extracted provider modal surface');
+assert.match(chatBox, /AboutModal/, 'ChatBox must compose an extracted about modal surface');
+assert.match(chatBox, /TemplateEditorModal/, 'ChatBox must compose an extracted template modal surface');
+assert.match(chatBox, /RenameConversationModal/, 'ChatBox must compose an extracted rename modal surface');
 assert.match(chatBox, /loadStoredConversations/, 'ChatBox must load conversations through storage helpers');
 assert.match(chatBox, /filteredConversations/, 'ChatBox must support conversation search/filter');
 assert.match(chatBox, /renameConversationId/, 'ChatBox must support explicit conversation rename');
@@ -173,5 +196,9 @@ const roadmap = text('docs/NEXT_UPGRADE_ROADMAP.md');
 assert.match(roadmap, /Execution Evidence/, 'roadmap must record execution evidence');
 assert.match(roadmap, /Phase 1/, 'roadmap must keep phase references');
 assert.match(roadmap, /pnpm lint/, 'roadmap must record verification commands');
+
+const optimizationDirections = text('docs/NEXT_OPTIMIZATION_DIRECTIONS.md');
+assert.match(optimizationDirections, /Maintainability/, 'optimization directions must track the maintainability direction');
+assert.match(optimizationDirections, /behavior-level/, 'optimization directions must mention behavior-level verification');
 
 console.log('upgrade verification checks passed');

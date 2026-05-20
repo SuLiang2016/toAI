@@ -1,4 +1,4 @@
-import {
+import type {
   Conversation,
   Message,
   PromptTemplate,
@@ -45,7 +45,7 @@ export function loadStoredConversations(): Conversation[] {
 export function saveConversations(conversations: Conversation[]) {
   writeLocalJson(CONVERSATIONS_KEY, conversations.map(conversation => ({
     ...conversation,
-    messages: conversation.messages.map(message => ({ status: 'complete', ...message })),
+    messages: conversation.messages.map(message => ({ ...message, status: message.status ?? 'complete' })),
   })));
 }
 

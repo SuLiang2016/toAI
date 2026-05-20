@@ -1,5 +1,5 @@
 import { normalizeProviderCapabilities, normalizeProviderSettings, validateProviderSettings } from '@/lib/storage';
-import { ProviderCapabilities, ProviderSettings } from '@/types/chat';
+import type { ProviderCapabilities, ProviderSettings } from '@/types/chat';
 
 export interface ProviderConfig {
   apiKey: string;
