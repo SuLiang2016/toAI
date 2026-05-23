@@ -10,6 +10,10 @@ export interface ProviderPresetFormDraft {
   baseUrl: string;
   model: string;
   supportsAttachments: boolean;
+  supportsImages: boolean;
+  streaming: boolean;
+  maxImageAttachmentBytes: string;
+  maxTextFileBytes: string;
 }
 
 export interface AboutInfo {
@@ -21,4 +25,3 @@ export interface DiagnosticsInfo {
   logsPath: string;
   lastStartupDiagnostic: unknown;
 }
-

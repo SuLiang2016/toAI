@@ -51,7 +51,10 @@ export default function ProviderPresetsModal({
         <div className="mb-4 rounded-md border border-gray-200 p-3 text-sm text-gray-700">
           Active: {activeProviderPreset ? activeProviderPreset.name : 'Environment defaults'}
           <div className="mt-1 text-xs text-gray-500">
-            Attachments: {activeProviderPreset ? (activeProviderPreset.supportsAttachments ? 'enabled by active preset' : 'disabled by active preset') : 'controlled by environment defaults'}
+            Status: {formatProviderStatus(activeProviderPreset)}
+          </div>
+          <div className="mt-1 text-xs text-gray-500">
+            Capabilities: {formatCapabilitiesSummary(activeProviderPreset)}
           </div>
           <div className="mt-2 flex flex-wrap gap-2">
             <button onClick={onCheckProviderPreset} className="rounded-md bg-gray-100 px-3 py-2 text-xs text-gray-700 hover:bg-gray-200 disabled:opacity-50" disabled={providerCheckInFlight} type="button">
@@ -63,7 +66,7 @@ export default function ProviderPresetsModal({
 
         <div className="mb-4 grid gap-2">
           {providerPresets.map(preset => (
-            <div key={preset.id} className="flex flex-wrap items-center gap-2 rounded-md border border-gray-200 p-3">
+            <div key={preset.id} className="flex flex-wrap items-start gap-2 rounded-md border border-gray-200 p-3">
               <button
                 onClick={() => onActivateProviderPreset(preset.id)}
                 className={`rounded px-2 py-1 text-xs ${
@@ -77,6 +80,12 @@ export default function ProviderPresetsModal({
                 <div className="truncate text-sm font-medium text-gray-900">{preset.name}</div>
                 <div className="truncate text-xs text-gray-500">
                   {preset.model || 'env model'} at {preset.baseUrl || 'env base URL'}
+                </div>
+                <div className="mt-1 text-[11px] text-gray-400">
+                  {formatCapabilitiesSummary(preset)}
+                </div>
+                <div className="mt-1 text-[11px] text-gray-400">
+                  {formatProviderStatus(preset)}
                 </div>
               </div>
               <button onClick={() => onOpenEditProviderPreset(preset)} className="rounded px-2 py-1 text-xs text-gray-600 hover:bg-gray-100" type="button">
@@ -106,38 +115,82 @@ export default function ProviderPresetsModal({
             />
           </label>
 
-          <label className="mb-3 block">
-            <span className="mb-1 block text-sm font-medium text-gray-700">API Base URL</span>
-            <input
-              value={presetDraft.baseUrl}
-              onChange={event => onPresetDraftChange({ ...presetDraft, baseUrl: event.target.value })}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </label>
+          <div className="grid gap-3 md:grid-cols-2">
+            <label className="block">
+              <span className="mb-1 block text-sm font-medium text-gray-700">API Base URL</span>
+              <input
+                value={presetDraft.baseUrl}
+                onChange={event => onPresetDraftChange({ ...presetDraft, baseUrl: event.target.value })}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </label>
 
-          <label className="mb-3 block">
-            <span className="mb-1 block text-sm font-medium text-gray-700">Model name</span>
-            <input
-              value={presetDraft.model}
-              onChange={event => onPresetDraftChange({ ...presetDraft, model: event.target.value })}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </label>
+            <label className="block">
+              <span className="mb-1 block text-sm font-medium text-gray-700">Model name</span>
+              <input
+                value={presetDraft.model}
+                onChange={event => onPresetDraftChange({ ...presetDraft, model: event.target.value })}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </label>
+          </div>
 
-          <label className="mb-3 flex items-center gap-2 text-sm text-gray-700">
-            <input
-              type="checkbox"
-              checked={presetDraft.supportsAttachments}
-              onChange={event => onPresetDraftChange({ ...presetDraft, supportsAttachments: event.target.checked })}
-            />
-            Enable image attachment passthrough
-          </label>
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            <label className="flex items-center gap-2 text-sm text-gray-700">
+              <input
+                type="checkbox"
+                checked={presetDraft.supportsAttachments}
+                onChange={event => onPresetDraftChange({ ...presetDraft, supportsAttachments: event.target.checked })}
+              />
+              Enable image attachment passthrough
+            </label>
 
-          {providerError && <p className="text-sm text-red-600">{providerError}</p>}
+            <label className="flex items-center gap-2 text-sm text-gray-700">
+              <input
+                type="checkbox"
+                checked={presetDraft.supportsImages}
+                onChange={event => onPresetDraftChange({ ...presetDraft, supportsImages: event.target.checked })}
+              />
+              Provider supports image content
+            </label>
+
+            <label className="flex items-center gap-2 text-sm text-gray-700">
+              <input
+                type="checkbox"
+                checked={presetDraft.streaming}
+                onChange={event => onPresetDraftChange({ ...presetDraft, streaming: event.target.checked })}
+              />
+              Streaming expected
+            </label>
+          </div>
+
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            <label className="block">
+              <span className="mb-1 block text-sm font-medium text-gray-700">Max image bytes</span>
+              <input
+                value={presetDraft.maxImageAttachmentBytes}
+                onChange={event => onPresetDraftChange({ ...presetDraft, maxImageAttachmentBytes: event.target.value })}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                inputMode="numeric"
+              />
+            </label>
+
+            <label className="block">
+              <span className="mb-1 block text-sm font-medium text-gray-700">Max text file bytes</span>
+              <input
+                value={presetDraft.maxTextFileBytes}
+                onChange={event => onPresetDraftChange({ ...presetDraft, maxTextFileBytes: event.target.value })}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                inputMode="numeric"
+              />
+            </label>
+          </div>
+
+          {providerError && <p className="mt-3 text-sm text-red-600">{providerError}</p>}
         </div>
 
         <p className="mb-4 text-xs text-gray-500">
-          API keys still come from `.env.local`; presets store only provider URL, model, and capability hints.
+          API keys still come from `.env.local`; presets store provider URL, model, capability hints, and last connectivity result only.
         </p>
 
         <div className="flex justify-end gap-2">
@@ -153,3 +206,30 @@ export default function ProviderPresetsModal({
   );
 }
 
+function formatProviderStatus(preset: ProviderPreset | null): string {
+  if (!preset) {
+    return 'Environment defaults; no preset-specific reachability recorded';
+  }
+
+  const status = preset.lastCheckStatus ?? 'unchecked';
+  if (!preset.lastCheckedAt) {
+    return status === 'unchecked' ? 'Not checked yet' : status;
+  }
+
+  return `${status} at ${new Date(preset.lastCheckedAt).toLocaleString()}`;
+}
+
+function formatCapabilitiesSummary(preset: ProviderPreset | null): string {
+  const capabilities = preset?.capabilities;
+  if (!capabilities) {
+    return 'Capabilities inherit environment defaults';
+  }
+
+  return [
+    capabilities.supportsAttachments ? 'attachments on' : 'attachments off',
+    capabilities.supportsImages ? 'images on' : 'images off',
+    capabilities.streaming ? 'streaming on' : 'streaming off',
+    `image ${capabilities.maxImageAttachmentBytes}B`,
+    `text ${capabilities.maxTextFileBytes}B`,
+  ].join(' | ');
+}

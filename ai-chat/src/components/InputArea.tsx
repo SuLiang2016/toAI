@@ -3,11 +3,9 @@
 /* eslint-disable @next/next/no-img-element */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import FileUpload from './FileUpload';
-import { PromptTemplate } from '@/types/chat';
+import type { PromptTemplate, ProviderCapabilities } from '@/types/chat';
 
 type SendResult = boolean | void | Promise<boolean | void>;
-const MAX_IMAGE_ATTACHMENT_SIZE = 5 * 1024 * 1024;
-const MAX_TEXT_FILE_SIZE = 256 * 1024;
 
 interface InputAreaProps {
   value: string;
@@ -16,7 +14,7 @@ interface InputAreaProps {
   onStop?: () => void;
   isLoading: boolean;
   templates: PromptTemplate[];
-  supportsAttachments: boolean;
+  providerCapabilities: ProviderCapabilities;
 }
 
 interface SelectedAttachment {
@@ -29,7 +27,7 @@ interface SlashRange {
   end: number;
 }
 
-export default function InputArea({ value, onChange, onSend, onStop, isLoading, templates, supportsAttachments }: InputAreaProps) {
+export default function InputArea({ value, onChange, onSend, onStop, isLoading, templates, providerCapabilities }: InputAreaProps) {
   const [selectedFiles, setSelectedFiles] = useState<SelectedAttachment[]>([]);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [slashRange, setSlashRange] = useState<SlashRange | null>(null);
@@ -160,13 +158,13 @@ export default function InputArea({ value, onChange, onSend, onStop, isLoading, 
 
     for (const file of files) {
       if (file.type.startsWith('image/')) {
-        if (!supportsAttachments) {
+        if (!providerCapabilities.supportsAttachments || !providerCapabilities.supportsImages) {
           setAttachmentError('Image attachments are disabled for the active provider.');
           continue;
         }
 
-        if (file.size > MAX_IMAGE_ATTACHMENT_SIZE) {
-          setAttachmentError(`Image attachments must be ${formatBytes(MAX_IMAGE_ATTACHMENT_SIZE)} or smaller.`);
+        if (file.size > providerCapabilities.maxImageAttachmentBytes) {
+          setAttachmentError(`Image attachments must be ${formatBytes(providerCapabilities.maxImageAttachmentBytes)} or smaller.`);
           continue;
         }
 
@@ -178,8 +176,8 @@ export default function InputArea({ value, onChange, onSend, onStop, isLoading, 
       }
 
       if (isPlainTextFile(file)) {
-        if (file.size > MAX_TEXT_FILE_SIZE) {
-          setAttachmentError(`Text files must be ${formatBytes(MAX_TEXT_FILE_SIZE)} or smaller.`);
+        if (file.size > providerCapabilities.maxTextFileBytes) {
+          setAttachmentError(`Text files must be ${formatBytes(providerCapabilities.maxTextFileBytes)} or smaller.`);
           continue;
         }
 
@@ -311,9 +309,9 @@ export default function InputArea({ value, onChange, onSend, onStop, isLoading, 
           onFilesSelected={handleFilesSelected}
           accept="image/*,.pdf,.doc,.docx,.txt"
           multiple
-          title={supportsAttachments ? 'Upload file' : 'Images disabled; text files still import'}
+          title={providerCapabilities.supportsAttachments ? 'Upload file' : 'Images disabled; text files still import'}
         />
-        {!supportsAttachments && (
+        {!providerCapabilities.supportsAttachments && (
           <span className="mb-2 text-xs text-gray-400">Images disabled; .txt import available</span>
         )}
 
@@ -385,6 +383,12 @@ export default function InputArea({ value, onChange, onSend, onStop, isLoading, 
             </svg>
           </button>
         )}
+      </div>
+
+      <div className="mt-2 flex flex-wrap gap-3 text-[11px] text-gray-400">
+        <span>{providerCapabilities.streaming ? 'Streaming on' : 'Streaming off'}</span>
+        <span>Image limit {formatBytes(providerCapabilities.maxImageAttachmentBytes)}</span>
+        <span>Text limit {formatBytes(providerCapabilities.maxTextFileBytes)}</span>
       </div>
     </div>
   );

@@ -5,7 +5,12 @@ interface AboutModalProps {
   aboutInfo: AboutInfo | null;
   diagnosticsInfo: DiagnosticsInfo | null;
   logActionStatus: string | null;
+  backupActionStatus: string | null;
+  storageHealthSummary: string | null;
+  recoveryHint: string | null;
   onClose: () => void;
+  onExportBackup: () => void;
+  onRestoreBackup: () => void;
   onExportLogs: () => void;
   onOpenLogs: () => void;
 }
@@ -14,7 +19,12 @@ export default function AboutModal({
   aboutInfo,
   diagnosticsInfo,
   logActionStatus,
+  backupActionStatus,
+  storageHealthSummary,
+  recoveryHint,
   onClose,
+  onExportBackup,
+  onRestoreBackup,
   onExportLogs,
   onOpenLogs,
 }: AboutModalProps) {
@@ -34,10 +44,28 @@ export default function AboutModal({
           <div>Version: {aboutInfo?.version ?? 'Unavailable'}</div>
           <div>Platform: {aboutInfo?.platform ?? 'Unavailable'}</div>
           <div>Conversation store: localStorage</div>
+          <div>Long-term storage strategy: keep localStorage canonical until a desktop-owned store is justified</div>
+          <div>Backup restore mode: replace-only</div>
           <div className="break-all">Log path: {diagnosticsInfo?.logsPath ?? 'Unavailable'}</div>
           <div>Startup: {formatDiagnostic(diagnosticsInfo?.lastStartupDiagnostic)}</div>
         </div>
+        {storageHealthSummary && (
+          <p className="mt-3 break-all rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600">
+            {storageHealthSummary}
+          </p>
+        )}
+        {recoveryHint && (
+          <p className="mt-3 break-all rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700">
+            {recoveryHint}
+          </p>
+        )}
         <div className="mt-4 flex flex-wrap gap-2">
+          <button onClick={onExportBackup} className="rounded-md bg-blue-50 px-3 py-2 text-sm text-blue-700 hover:bg-blue-100" type="button">
+            Export backup
+          </button>
+          <button onClick={onRestoreBackup} className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-700 hover:bg-amber-100" type="button">
+            Restore backup
+          </button>
           <button onClick={onExportLogs} className="rounded-md bg-gray-100 px-3 py-2 text-sm text-gray-700 hover:bg-gray-200" type="button">
             Export logs
           </button>
@@ -45,9 +73,12 @@ export default function AboutModal({
             Open logs
           </button>
         </div>
+        <p className="mt-3 text-xs text-gray-500">
+          Backup restore replaces all current local AI Chat data. Invalid backups do not change current data.
+        </p>
+        {backupActionStatus && <p className="mt-3 break-all text-xs text-gray-500">{backupActionStatus}</p>}
         {logActionStatus && <p className="mt-3 break-all text-xs text-gray-500">{logActionStatus}</p>}
       </div>
     </div>
   );
 }
-

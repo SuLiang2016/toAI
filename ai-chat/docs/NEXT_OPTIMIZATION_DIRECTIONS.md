@@ -1,13 +1,18 @@
 # AI Chat Next Optimization Directions
 
-This document records the candidate optimization directions after the completed reliability, provider, and desktop-hardening batch. It is planning-only and should be refreshed whenever a direction moves from backlog into executed work.
+This document records the candidate optimization directions after the completed reliability, provider, desktop-hardening, and data portability batches. It is planning-only and should be refreshed whenever a direction moves from backlog into executed work.
 
 ## Current Baseline
 
 The current app already includes:
 
 - conversation persistence, drafts, and prompt templates,
+- conversation pin/archive controls plus an archived-view filter,
+- keyboard shortcuts for search and new-chat flow,
+- versioned local backup export and strict replace-only restore for app-owned data,
+- local-storage health warnings and recovery hints for quarantined records,
 - provider presets with validation and connectivity checks,
+- provider capability metadata and stored reachability status,
 - per-conversation provider snapshots,
 - extracted streaming and storage helpers,
 - sanitized Electron diagnostics and log export/open actions,
@@ -15,24 +20,20 @@ The current app already includes:
 
 The next optimization cycle should stop treating these as backlog items and instead focus on what still limits safe iteration.
 
-## Direction 1: Maintainability And Verification Foundation
+## Direction 1: Maintainability And Verification Foundation (Completed 2026-05-20)
 
-Goal: reduce change cost in the chat shell and move verification toward executable behavior-level checks without adding dependencies.
+Outcome delivered in the current baseline:
 
-Candidate improvements:
+- `ChatBox.tsx` was decomposed into sidebar, provider, template, rename, and About modal surfaces.
+- `useChat.ts` now leans on stable helper boundaries for client submission work.
+- `pnpm test` runs built-in Node behavior tests for storage, streaming, and provider config before the contract checker.
+- No new package dependencies were introduced.
 
-- Extract `ChatBox.tsx` by UI surface so sidebar, provider settings, template editor, rename dialog, and About/diagnostics are not rendered inline in one file.
-- Trim `useChat.ts` by moving client submission, attachment encoding, and error-sanitization helpers behind stable module boundaries.
-- Add built-in Node behavior tests for `src/lib/streaming.ts`, `src/lib/storage.ts`, and `src/server/ai/config.ts`.
-- Keep `scripts/verify-upgrade.mjs` as a contract guard, but stop using it as the only `pnpm test` gate.
-- Update planning docs so future sessions do not keep re-planning already-completed reliability work.
+Future follow-ups for this area:
 
-Acceptance signals:
-
-- `ChatBox.tsx` is materially smaller and coordinates behavior instead of inlining every modal/sidebar surface.
-- Existing chat, provider, template, and diagnostics behavior still works.
-- `pnpm test` runs behavior-level checks before the contract checker.
-- No new package dependencies are introduced.
+- keep behavior-level verification expanding with new feature work,
+- preserve the extracted UI boundaries instead of collapsing behavior back into `ChatBox.tsx`,
+- revisit browser or Electron automation only when dependency or workflow tradeoffs are explicit.
 
 Primary touchpoints:
 
@@ -46,61 +47,87 @@ Primary touchpoints:
 - `scripts/run-behavior-tests.mjs`
 - `scripts/*.behavior.test.mjs`
 
-## Direction 2: Data Portability And Recovery
+## Direction 2: Data Portability And Recovery (Completed 2026-05-20)
 
-Goal: make local data more durable and easier to move across reinstalls or machines.
+Outcome delivered in the current baseline:
+
+- Users can export a versioned JSON backup for the app-owned `localStorage` boundary.
+- Restore is explicit, replace-only, and rejects invalid backups with zero mutation.
+- Mid-restore write failures roll back to the pre-restore snapshot.
+- Web mode and Electron mode now share a documented portability contract without changing canonical storage.
+
+Future follow-ups for this area:
+
+- encrypted backups or scheduled backups,
+- explicit installer upgrade compatibility testing across releases,
+- a later revisit of whether `localStorage` should stay canonical long term.
+
+## Direction 3: Release Readiness (Completed 2026-05-23)
+
+Goal: move from local packaging success to an internal RC evidence lane with explicit public-release blockers.
+
+Outcome delivered in the current baseline:
+
+- 2026-05-20 internal RC baseline evidence remains preserved.
+- 2026-05-23 reran static verification and installer packaging after the roadmap Phase 2-5 batch.
+- release evidence is now explicitly classified as `already evidenced`, `freshly rerun`, or `deferred`.
+- public distribution remains blocked by signing, update-channel, rollback, and trust-policy prerequisites.
 
 Candidate improvements:
 
-- Add conversation/template export and import.
-- Add storage-size guardrails and user-facing recovery hints for corrupted local data.
-- Decide whether browser `localStorage` remains the long-term store or whether Electron user data / IndexedDB should become the canonical persistence layer.
-- Define explicit compatibility expectations for app upgrades and reinstalls.
-
-Acceptance signals:
-
-- Users can export and re-import important local data.
-- Corrupted storage no longer forces silent data loss.
-- Web mode and Electron mode have a documented storage boundary.
-
-## Direction 3: Release Readiness
-
-Goal: move from local packaging success to a repeatable desktop release lane.
-
-Candidate improvements:
-
-- Verify installer upgrade/reinstall behavior against retained user data.
 - Decide signing ownership and secret storage before enabling public installers.
 - Define stable/beta/rollback update channels before any auto-update work.
-- Add scripted smoke checks around packaged desktop startup and diagnostics.
+- Refresh interactive packaged UI smoke only when a later lane changes packaged behavior.
 
 Acceptance signals:
 
 - Release steps are reproducible.
-- Upgrade/uninstall/reinstall behavior is documented and tested.
+- Installer packaging evidence stays traceable to dated records.
 - Auto-update remains deferred until the required infra exists.
+- Public distribution remains blocked until signing and update prerequisites exist.
 
-## Direction 4: UX Depth After Structure Stabilizes
+## Direction 4: UX Depth After Structure Stabilizes (Completed 2026-05-23)
 
 Goal: keep improving repeated chat workflows after the maintainability foundation is in place.
 
-Candidate improvements:
+Outcome delivered in the current baseline:
 
-- Better narrow-layout ergonomics and empty/filter states.
-- More keyboard affordances around conversation navigation and message actions.
-- Better organization tools for larger conversation sets.
-- Future message utilities such as pin/favorite/archive once current state ownership is cleaner.
+- conversations can now be pinned and archived,
+- the sidebar supports archived/inbox switching with clearer empty states,
+- `Ctrl/Cmd+K` focuses conversation search and `Alt+N` starts a new chat,
+- recovery hints surface when local records were previously quarantined.
 
 Acceptance signals:
 
 - UX work lands on clearer component boundaries instead of expanding a monolithic shell.
 - Layout changes do not regress provider/template/draft behavior.
 
+## Direction 5: Backup Enhancements And Local Data Strategy (Completed 2026-05-23 baseline pass)
+
+Outcome delivered in the current baseline:
+
+- the app now shows a soft-limit warning when app-owned local data grows large,
+- About now explains the current local-data strategy and replace-only restore contract,
+- roadmap docs now state that `localStorage` remains canonical until a desktop-owned store is justified.
+
+Future follow-ups:
+
+- encrypted backups or scheduled backups,
+- a stronger storage dashboard if large datasets become common,
+- migration to a desktop-owned store only when local-first ergonomics clearly require it.
+
+## Direction 6: Public Distribution Infrastructure (Blocked outside repo-only execution)
+
+Current status:
+
+- unsigned installers are still internal-only,
+- update channels and rollback metadata hosting are still undefined,
+- trust-policy and signing ownership are still external prerequisites.
+
 ## Prioritization
 
 Recommended order from the current baseline:
 
-1. Maintainability and executable behavior-level verification.
-2. Data portability and recovery.
-3. Release readiness once external signing/update constraints are defined.
-4. Broader UX depth on top of the smaller component boundaries.
+1. Cross-version installer upgrade evidence when an old-version artifact is available.
+2. Fresh interactive packaged smoke for About, backup export/restore, and log actions when a packaging-refresh lane is opened.
+3. External ownership decisions for signing, update metadata, rollback, and public trust policy.

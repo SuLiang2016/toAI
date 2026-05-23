@@ -178,7 +178,7 @@ pnpm build
 
 ## Phase 4: Desktop Diagnostics And Release Readiness
 
-Objective: make Electron behavior supportable and prepare for distribution.
+Objective: make Electron behavior supportable and prepare for internal RC evidence, not public distribution.
 
 Scope:
 
@@ -187,6 +187,7 @@ Scope:
 - Startup diagnostics for embedded Next server failures.
 - Production launch smoke checks.
 - Release checklist for signing, update channel, rollback, and installer behavior.
+- Release evidence template with explicit gate states.
 
 Acceptance criteria:
 
@@ -194,6 +195,7 @@ Acceptance criteria:
 - Logs remain sanitized and do not include secrets.
 - Failed embedded-server startup is recorded with a useful message.
 - `pnpm electron-build` remains reproducible.
+- Public distribution stays blocked until signing, update, and rollback prerequisites exist.
 
 Suggested verification:
 
@@ -203,6 +205,7 @@ pnpm typecheck
 pnpm test
 pnpm build
 pnpm electron-build
+pnpm electron-installer
 ```
 
 ## Phase 5: Verification Upgrade
@@ -290,6 +293,86 @@ Known gaps after this batch:
 
 - Manual smoke checks were not rerun inside this session because no browser automation pass was requested for the refactor-only UI extraction.
 - `pnpm electron-build` was not rerun because this batch did not change Electron main/preload/build behavior.
+
+Execution date: 2026-05-20.
+
+Data portability and recovery batch:
+
+- `src/lib/storage.ts` now owns a versioned backup envelope, strict backup validation, explicit backup-to-runtime key mapping, replace-only restore semantics, and rollback to a raw key snapshot if any restore write fails.
+- `src/components/ChatBox.tsx` and `src/components/chatbox/AboutModal.tsx` now expose backup export and restore actions without widening Electron IPC; restore requires explicit confirmation and reloads the app after success.
+- `scripts/storage.behavior.test.mjs` now covers deterministic export, valid replace-only restore, malformed or incompatible backup rejection with zero mutation, referential-integrity failures, and rollback after a simulated mid-restore write failure.
+- `scripts/verify-upgrade.mjs` now treats the backup/restore contract and About-surface backup actions as part of the standing repo verification surface.
+- `docs/NEXT_OPTIMIZATION_DIRECTIONS.md` and `docs/NEXT_EXECUTION_PLAN.md` were advanced so the repo no longer treats this portability batch as future work.
+
+Fresh verification results:
+
+- `pnpm test`: passed with 28 behavior tests plus `upgrade verification checks passed`.
+- `pnpm lint`: passed.
+- `pnpm typecheck`: passed.
+- `pnpm build`: passed; routes include `/`, `/api/chat`, and `/api/provider/check`.
+
+Known gaps after this batch:
+
+- Manual browser smoke for export/download and restore/file-pick flows was not rerun in this session.
+- `pnpm electron-dev` was not rerun because the optional Electron backup dialog bridge was intentionally not implemented.
+- `pnpm electron-build` was not rerun because this batch did not change Electron main/preload/build behavior or packaging paths.
+
+Execution date: 2026-05-20.
+
+Internal RC evidence batch:
+
+- `docs/RELEASE_CHECKLIST.md` now names explicit gate states for static, unpacked, installer, blocked, and deferred outcomes instead of implying public release approval.
+- `docs/RELEASE_EVIDENCE_TEMPLATE.md` now provides a compact evidence record format for static, unpacked, installer, and public-distribution gates.
+- `docs/RELEASE_RC_EVIDENCE_2026-05-20.md` records fresh static evidence, unpacked launch evidence, same-version installer smoke, and explicit public-release blockers.
+- `scripts/verify-upgrade.mjs` now keeps the release-language contract honest by asserting the internal-RC framing and evidence-template fields.
+
+Fresh verification results:
+
+- `pnpm lint`: passed.
+- `pnpm typecheck`: passed.
+- `pnpm test`: passed with 28 behavior tests plus `upgrade verification checks passed`.
+- `pnpm build`: passed; routes include `/`, `/api/chat`, and `/api/provider/check`.
+- `pnpm electron-build`: passed; `dist/win-unpacked/AI Chat.exe` was produced.
+- `pnpm electron-installer`: passed; `dist/AI Chat Setup 1.0.0.exe` and `.blockmap` were produced.
+
+Smoke evidence:
+
+- The unpacked app launched successfully and created/updated user data under `C:\Users\admin\AppData\Roaming\ai-chat`.
+- The installed app launched successfully from `C:\Users\admin\AppData\Local\Programs\ai-chat\AI Chat.exe`.
+- Silent uninstall removed the installed executable while keeping the user-data directory in place.
+- Silent reinstall recreated the installed executable and launched successfully before cleanup.
+
+Known gaps after this batch:
+
+- Interactive packaged checks for About, backup export/restore, and log export/open remain deferred.
+- Cross-version upgrade retention is still deferred; this session only proved same-version reinstall behavior.
+- Public distribution remains blocked until signing ownership, timestamping, update channels, rollback metadata hosting, and trust policy are defined.
+
+Execution date: 2026-05-23.
+
+Roadmap Phase 1-6 completion batch:
+
+- Phase 1 RC evidence delta closure: preserved the 2026-05-20 internal RC baseline, reran fresh static verification, rebuilt installer artifacts, and recorded the delta-closure evidence in `docs/RELEASE_RC_EVIDENCE_2026-05-23.md`.
+- Phase 2 cross-version compatibility evidence: behavior tests now prove legacy conversation records, legacy provider presets, and legacy provider snapshots still normalize under the current runtime contract; installer-level old-version to new-version evidence remains a separate deferred path.
+- Phase 3 UX depth: the sidebar now supports pin/archive organization, archived/inbox switching, clearer empty states, `Ctrl/Cmd+K` search focus, `Alt+N` new chat, and visible recovery hints when corrupted local records were previously quarantined.
+- Phase 4 provider/model workflow depth: provider presets now store richer capability metadata, preserve last connectivity status, expose capability summaries in the settings modal, and drive dynamic attachment limits in the input area.
+- Phase 5 backup enhancements and local data strategy: the app now surfaces local-storage soft-limit warnings, exposes a storage-health summary in About, and documents that `localStorage` remains canonical until a desktop-owned store is justified.
+- Phase 6 public distribution infrastructure: public release remains intentionally blocked; the repo now preserves explicit blockers for signing ownership, timestamping, update-channel metadata, rollback hosting, and trust policy rather than implying those prerequisites were solved in code.
+
+Fresh verification results:
+
+- `pnpm test`: passed with 31 behavior tests plus `upgrade verification checks passed`.
+- `pnpm lint`: passed.
+- `pnpm typecheck`: passed.
+- `pnpm build`: passed; routes include `/`, `/api/chat`, and `/api/provider/check`.
+- `pnpm electron-installer`: passed; packaging refreshed `dist/win-unpacked/AI Chat.exe`, `dist/AI Chat Setup 1.0.0.exe`, and `dist/AI Chat Setup 1.0.0.exe.blockmap`.
+
+Known gaps after this batch:
+
+- No fresh interactive packaged UI smoke was run in this session for About, backup export/restore, or sanitized log actions; the 2026-05-20 evidence remains the latest direct packaged-interaction record.
+- Provider connectivity still requires a valid local `AI_API_KEY` or `OPENAI_API_KEY` for a real end-to-end reachability proof.
+- Cross-version installer upgrade retention is still deferred until an older artifact is intentionally exercised against the current build.
+- Public distribution remains blocked until external ownership exists for signing, update metadata, rollback policy, and trust policy.
 
 ## ADR
 

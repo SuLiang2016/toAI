@@ -21,15 +21,20 @@ import {
   createProviderSnapshot,
   createStorageId,
   deleteDraftForConversation,
+  exportAppBackup,
+  getStorageHealthSummary,
   loadActiveProviderPresetId,
   loadDraftForConversation,
   loadInitialConversationId,
   loadStoredConversations,
   loadStoredPromptTemplates,
   loadStoredProviderPresets,
+  normalizeProviderCapabilities,
   normalizeProviderSettings,
+  parseAppBackupJson,
   pruneConversationDrafts,
   readActiveProviderSettings,
+  restoreAppBackup,
   saveActiveConversationId,
   saveActiveProviderPresetId,
   saveConversations,
@@ -52,12 +57,17 @@ const EMPTY_PROVIDER_PRESET_FORM: ProviderPresetFormDraft = {
   baseUrl: '',
   model: '',
   supportsAttachments: false,
+  supportsImages: false,
+  streaming: true,
+  maxImageAttachmentBytes: '',
+  maxTextFileBytes: '',
 };
 
 export default function ChatBox() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [currentConvId, setCurrentConvId] = useState<string | null>(null);
   const [showSidebar, setShowSidebar] = useState(true);
+  const [showArchived, setShowArchived] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
   const [draftText, setDraftText] = useState('');
@@ -74,28 +84,66 @@ export default function ChatBox() {
   const [providerError, setProviderError] = useState<string | null>(null);
   const [aboutInfo, setAboutInfo] = useState<AboutInfo | null>(null);
   const [diagnosticsInfo, setDiagnosticsInfo] = useState<DiagnosticsInfo | null>(null);
+  const [backupActionStatus, setBackupActionStatus] = useState<string | null>(null);
   const [logActionStatus, setLogActionStatus] = useState<string | null>(null);
   const [providerCheckInFlight, setProviderCheckInFlight] = useState(false);
   const currentConvIdRef = useRef<string | null>(currentConvId);
   const draftTextRef = useRef('');
+  const restoreBackupInputRef = useRef<HTMLInputElement | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
   const conversationButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const providerSnapshotRef = useRef<ProviderSnapshot>(createProviderSnapshot());
 
   const currentConversation = conversations.find(conversation => conversation.id === currentConvId) ?? null;
   const activeProviderPreset = providerPresets.find(preset => preset.id === activeProviderPresetId) ?? null;
   const activeProviderSnapshot = useMemo(() => createProviderSnapshot(activeProviderPreset ?? undefined), [activeProviderPreset]);
+  const activeProviderCapabilities = useMemo(
+    () => activeProviderPreset
+      ? normalizeProviderCapabilities(activeProviderPreset)
+      : normalizeProviderCapabilities({
+          supportsAttachments: true,
+          capabilities: {
+            supportsAttachments: true,
+            supportsImages: true,
+            maxImageAttachmentBytes: 5 * 1024 * 1024,
+            maxTextFileBytes: 256 * 1024,
+            streaming: true,
+          },
+        }),
+    [activeProviderPreset]
+  );
   const filteredConversations = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
-    if (!query) return conversations;
+    const scopedConversations = conversations.filter(conversation => Boolean(conversation.archived) === showArchived);
+    const searchedConversations = !query
+      ? scopedConversations
+      : scopedConversations.filter(conversation => {
+          if (conversation.title.toLowerCase().includes(query)) return true;
+          return conversation.messages.some(message =>
+            message.content.toLowerCase().includes(query) ||
+            message.attachments?.some(attachment => attachment.name.toLowerCase().includes(query))
+          );
+        });
 
-    return conversations.filter(conversation => {
-      if (conversation.title.toLowerCase().includes(query)) return true;
-      return conversation.messages.some(message =>
-        message.content.toLowerCase().includes(query) ||
-        message.attachments?.some(attachment => attachment.name.toLowerCase().includes(query))
-      );
+    return [...searchedConversations].sort((left, right) => {
+      if (Boolean(left.pinned) !== Boolean(right.pinned)) {
+        return left.pinned ? -1 : 1;
+      }
+      return right.updatedAt - left.updatedAt;
     });
-  }, [conversations, searchQuery]);
+  }, [conversations, searchQuery, showArchived]);
+  const archivedCount = useMemo(
+    () => conversations.filter(conversation => conversation.archived).length,
+    [conversations]
+  );
+  const storageHealth = getStorageHealthSummary();
+  const storageWarning = storageHealth.overSoftLimit
+    ? `Local AI Chat data is ${formatBytes(storageHealth.appDataBytes)}. Export a backup or clean drafts before this grows further.`
+    : null;
+  const recoveryHint = storageHealth.quarantinedRecordCount > 0
+    ? `${storageHealth.quarantinedRecordCount} corrupted local record(s) were quarantined earlier. Export a backup after verifying your active conversations.`
+    : null;
+  const storageHealthSummary = `App-owned local data uses ${formatBytes(storageHealth.appDataBytes)} of a ${formatBytes(storageHealth.softLimitBytes)} soft limit.`;
 
   const loadDraftIntoState = useCallback((conversationId: string | null) => {
     const nextDraft = loadDraftForConversation(conversationId);
@@ -187,14 +235,14 @@ export default function ChatBox() {
     }
   }, [aboutInfo, diagnosticsInfo, showAbout]);
 
-  const handleNewChat = () => {
+  const handleNewChat = useCallback(() => {
     persistCurrentDraft();
     currentConvIdRef.current = null;
     clearMessages();
     setCurrentConvId(null);
     saveActiveConversationId(null);
     loadDraftIntoState(null);
-  };
+  }, [clearMessages, loadDraftIntoState, persistCurrentDraft]);
 
   const handleSelectConversation = (conversation: Conversation) => {
     persistCurrentDraft();
@@ -205,6 +253,39 @@ export default function ChatBox() {
     loadMessages(conversation.messages);
     loadDraftIntoState(conversation.id);
   };
+
+  useEffect(() => {
+    const handleWindowKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const isEditableTarget = target?.tagName === 'INPUT'
+        || target?.tagName === 'TEXTAREA'
+        || target?.isContentEditable;
+
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        if (!showSidebar) {
+          setShowSidebar(true);
+        }
+        searchInputRef.current?.focus();
+        searchInputRef.current?.select();
+        return;
+      }
+
+      if (event.altKey && event.key.toLowerCase() === 'n') {
+        event.preventDefault();
+        handleNewChat();
+        return;
+      }
+
+      if (event.altKey && event.key.toLowerCase() === 'a' && !isEditableTarget) {
+        event.preventDefault();
+        setShowArchived(previous => !previous);
+      }
+    };
+
+    window.addEventListener('keydown', handleWindowKeyDown);
+    return () => window.removeEventListener('keydown', handleWindowKeyDown);
+  }, [handleNewChat, showSidebar]);
 
   const handleSend = async (content: string, files?: File[]) => {
     const draftConversationId = currentConvIdRef.current;
@@ -265,6 +346,28 @@ export default function ChatBox() {
     setRenameDraft('');
   };
 
+  const updateConversationList = (updater: (conversation: Conversation) => Conversation) => {
+    const nextConversations = conversations.map(conversation => updater(conversation));
+    setConversations(nextConversations);
+    saveConversations(nextConversations);
+  };
+
+  const toggleConversationPinned = (conversationId: string) => {
+    updateConversationList(conversation =>
+      conversation.id === conversationId
+        ? { ...conversation, pinned: !conversation.pinned, updatedAt: Date.now() }
+        : conversation
+    );
+  };
+
+  const toggleConversationArchived = (conversationId: string) => {
+    updateConversationList(conversation =>
+      conversation.id === conversationId
+        ? { ...conversation, archived: !conversation.archived, updatedAt: Date.now(), pinned: conversation.archived ? conversation.pinned : false }
+        : conversation
+    );
+  };
+
   const handleConversationKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>, conversationId: string) => {
     const index = filteredConversations.findIndex(conversation => conversation.id === conversationId);
     if (index < 0) return;
@@ -274,6 +377,18 @@ export default function ChatBox() {
       const nextIndex = event.key === 'ArrowDown' ? index + 1 : index - 1;
       const nextConversation = filteredConversations[nextIndex];
       conversationButtonRefs.current[nextConversation?.id ?? '']?.focus();
+      return;
+    }
+
+    if (event.key === 'Home') {
+      event.preventDefault();
+      conversationButtonRefs.current[filteredConversations[0]?.id ?? '']?.focus();
+      return;
+    }
+
+    if (event.key === 'End') {
+      event.preventDefault();
+      conversationButtonRefs.current[filteredConversations[filteredConversations.length - 1]?.id ?? '']?.focus();
     }
   };
 
@@ -305,10 +420,24 @@ export default function ChatBox() {
     handleDraftChange(message.content);
   };
 
+  const buildProviderSettingsFromDraft = (draft: ProviderPresetFormDraft) => normalizeProviderSettings({
+    baseUrl: draft.baseUrl,
+    model: draft.model,
+    supportsAttachments: draft.supportsAttachments,
+    capabilities: {
+      supportsAttachments: draft.supportsAttachments,
+      supportsImages: draft.supportsImages,
+      streaming: draft.streaming,
+      maxImageAttachmentBytes: parsePositiveInteger(draft.maxImageAttachmentBytes) ?? 5 * 1024 * 1024,
+      maxTextFileBytes: parsePositiveInteger(draft.maxTextFileBytes) ?? 256 * 1024,
+    },
+  });
+
   const saveProviderPreset = () => {
     setProviderError(null);
     const now = Date.now();
-    const validation = validateProviderSettings(normalizeProviderSettings(presetDraft));
+    const normalizedDraft = buildProviderSettingsFromDraft(presetDraft);
+    const validation = validateProviderSettings(normalizedDraft);
     if (!validation.ok) {
       setProviderError(validation.message || 'Provider preset is invalid.');
       return;
@@ -319,7 +448,14 @@ export default function ChatBox() {
     const nextPresets = presetDraft.id
       ? providerPresets.map(preset =>
           preset.id === presetDraft.id
-            ? { ...preset, ...normalizedPreset, name, updatedAt: now }
+            ? {
+                ...preset,
+                ...normalizedPreset,
+                name,
+                updatedAt: now,
+                lastCheckedAt: undefined,
+                lastCheckStatus: 'unchecked' as const,
+              }
             : preset
         )
       : [
@@ -330,6 +466,7 @@ export default function ChatBox() {
             ...normalizedPreset,
             createdAt: now,
             updatedAt: now,
+            lastCheckStatus: 'unchecked' as const,
           },
         ];
 
@@ -339,6 +476,32 @@ export default function ChatBox() {
     setActiveProviderPresetId(nextActiveId);
     saveActiveProviderPresetId(nextActiveId);
     setPresetDraft(EMPTY_PROVIDER_PRESET_FORM);
+  };
+
+  const persistProviderPresetList = (nextPresets: ProviderPreset[]) => {
+    setProviderPresets(nextPresets);
+    saveProviderPresets(nextPresets);
+  };
+
+  const updateActiveProviderReachability = (
+    status: 'reachable' | 'unreachable',
+    overrides?: Partial<ProviderPreset>
+  ) => {
+    if (!activeProviderPreset) return;
+
+    const checkedAt = Date.now();
+    const nextPresets = providerPresets.map(preset =>
+      preset.id === activeProviderPreset.id
+        ? {
+            ...preset,
+            ...overrides,
+            lastCheckedAt: checkedAt,
+            lastCheckStatus: status,
+          }
+        : preset
+    );
+
+    persistProviderPresetList(nextPresets);
   };
 
   const activateProviderPreset = (presetId: string) => {
@@ -353,6 +516,10 @@ export default function ChatBox() {
       baseUrl: preset.baseUrl ?? '',
       model: preset.model ?? '',
       supportsAttachments: preset.supportsAttachments ?? false,
+      supportsImages: preset.capabilities?.supportsImages ?? preset.supportsAttachments ?? false,
+      streaming: preset.capabilities?.streaming ?? true,
+      maxImageAttachmentBytes: String(preset.capabilities?.maxImageAttachmentBytes ?? ''),
+      maxTextFileBytes: String(preset.capabilities?.maxTextFileBytes ?? ''),
     });
     setProviderError(null);
   };
@@ -382,12 +549,18 @@ export default function ChatBox() {
       });
       const payload = await response.json();
       if (!response.ok || payload?.ok === false) {
+        updateActiveProviderReachability('unreachable');
         setProviderCheckState(payload?.error || 'Provider connectivity check failed.');
         return;
       }
 
+      updateActiveProviderReachability('reachable', {
+        ...(payload?.model ? { model: payload.model } : {}),
+        ...(payload?.capabilities ? { capabilities: payload.capabilities } : {}),
+      });
       setProviderCheckState(`Reachable: ${payload.model || activeProviderPreset?.model || 'model configured'}`);
     } catch (error) {
+      updateActiveProviderReachability('unreachable');
       setProviderCheckState(error instanceof Error ? error.message : 'Provider connectivity check failed.');
     } finally {
       setProviderCheckInFlight(false);
@@ -404,8 +577,64 @@ export default function ChatBox() {
   const openAbout = () => {
     setAboutInfo(null);
     setDiagnosticsInfo(null);
+    setBackupActionStatus(null);
     setLogActionStatus(null);
     setShowAbout(true);
+  };
+
+  const exportBackup = () => {
+    try {
+      const backup = exportAppBackup();
+      const serializedBackup = JSON.stringify(backup, null, 2);
+      const backupUrl = URL.createObjectURL(new Blob([serializedBackup], { type: 'application/json' }));
+      const downloadLink = document.createElement('a');
+      const safeTimestamp = backup.createdAt.replaceAll(':', '-').replaceAll('.', '-');
+
+      downloadLink.href = backupUrl;
+      downloadLink.download = `ai-chat-backup-${safeTimestamp}.json`;
+      downloadLink.click();
+      setBackupActionStatus(`Exported backup created at ${backup.createdAt}.`);
+      window.setTimeout(() => URL.revokeObjectURL(backupUrl), 0);
+    } catch (error) {
+      setBackupActionStatus(error instanceof Error ? error.message : 'Backup export failed.');
+    }
+  };
+
+  const requestBackupRestore = () => {
+    restoreBackupInputRef.current?.click();
+  };
+
+  const handleBackupFileSelection = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    try {
+      const serializedBackup = await file.text();
+      const backup = parseAppBackupJson(serializedBackup);
+      const confirmation = window.confirm([
+        `Restore backup from ${backup.createdAt}?`,
+        '',
+        'This replaces all current AI Chat local data:',
+        `- ${backup.localStorage.conversations.length} conversations`,
+        `- ${Object.keys(backup.localStorage.conversationDrafts).length} conversation drafts`,
+        `- ${backup.localStorage.promptTemplates.length} prompt templates`,
+        `- ${backup.localStorage.providerPresets.length} provider presets`,
+        '',
+        'The app will reload after a successful restore.',
+      ].join('\n'));
+
+      if (!confirmation) {
+        setBackupActionStatus('Backup restore cancelled.');
+        return;
+      }
+
+      restoreAppBackup(backup);
+      setBackupActionStatus(`Restored backup from ${backup.createdAt}. Reloading...`);
+      window.location.reload();
+    } catch (error) {
+      setBackupActionStatus(error instanceof Error ? error.message : 'Backup restore failed.');
+    }
   };
 
   const exportLogs = async () => {
@@ -482,6 +711,7 @@ export default function ChatBox() {
   };
 
   const currentProviderLabel = activeProviderPreset?.name || activeProviderPreset?.model || 'Environment defaults';
+  const currentProviderStatusLabel = activeProviderPreset?.lastCheckStatus ?? 'unchecked';
 
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50">
@@ -492,6 +722,11 @@ export default function ChatBox() {
           filteredConversations={filteredConversations}
           promptTemplates={promptTemplates}
           searchQuery={searchQuery}
+          showArchived={showArchived}
+          archivedCount={archivedCount}
+          storageWarning={storageWarning}
+          recoveryHint={recoveryHint}
+          searchInputRef={searchInputRef}
           onSearchChange={setSearchQuery}
           onNewChat={handleNewChat}
           onSelectConversation={handleSelectConversation}
@@ -501,6 +736,9 @@ export default function ChatBox() {
           }}
           onStartRename={handleStartRename}
           onDeleteConversation={handleDeleteConversation}
+          onToggleConversationPinned={toggleConversationPinned}
+          onToggleConversationArchived={toggleConversationArchived}
+          onToggleArchivedView={() => setShowArchived(previous => !previous)}
           onOpenNewTemplate={openNewTemplate}
           onInsertTemplate={insertTemplateIntoDraft}
           onOpenEditTemplate={openEditTemplate}
@@ -528,7 +766,7 @@ export default function ChatBox() {
               {currentConvId ? currentConversation?.title || 'Chat' : 'New chat'}
             </h1>
             <div className="truncate text-xs text-gray-500">
-              Provider: {currentProviderLabel}
+              Provider: {currentProviderLabel} | {currentProviderStatusLabel}
             </div>
           </div>
 
@@ -582,7 +820,7 @@ export default function ChatBox() {
           onStop={stopGeneration}
           isLoading={isLoading}
           templates={promptTemplates}
-          supportsAttachments={activeProviderPreset?.supportsAttachments ?? true}
+          providerCapabilities={activeProviderCapabilities}
         />
       </div>
 
@@ -610,8 +848,13 @@ export default function ChatBox() {
         <AboutModal
           aboutInfo={aboutInfo}
           diagnosticsInfo={diagnosticsInfo}
+          backupActionStatus={backupActionStatus}
           logActionStatus={logActionStatus}
+          storageHealthSummary={storageHealthSummary}
+          recoveryHint={recoveryHint}
           onClose={() => setShowAbout(false)}
+          onExportBackup={exportBackup}
+          onRestoreBackup={requestBackupRestore}
           onExportLogs={exportLogs}
           onOpenLogs={openLogs}
         />
@@ -637,6 +880,34 @@ export default function ChatBox() {
           onSave={handleSaveRename}
         />
       )}
+
+      <input
+        ref={restoreBackupInputRef}
+        className="hidden"
+        accept="application/json,.json"
+        onChange={handleBackupFileSelection}
+        type="file"
+      />
     </div>
   );
+}
+
+function parsePositiveInteger(value: string): number | undefined {
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+
+  const parsed = Number.parseInt(trimmed, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes <= 0) {
+    return '0 KB';
+  }
+
+  if (bytes >= 1024 * 1024) {
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  return `${Math.max(1, Math.round(bytes / 1024))} KB`;
 }

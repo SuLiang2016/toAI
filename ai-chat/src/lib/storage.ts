@@ -4,11 +4,13 @@ import type {
   PromptTemplate,
   ProviderCapabilities,
   ProviderPreset,
+  ProviderReachabilityStatus,
   ProviderSettings,
   ProviderSnapshot,
 } from '@/types/chat';
 
 export const STORAGE_SCHEMA_VERSION = 2;
+export const BACKUP_FORMAT_VERSION = 1;
 export const CONVERSATIONS_KEY = 'conversations';
 export const ACTIVE_CONVERSATION_KEY = 'currentConversationId';
 export const CONVERSATION_DRAFTS_KEY = 'conversationDrafts';
@@ -22,6 +24,7 @@ const LEGACY_DEFAULT_BASE_URL = 'https://api.openai.com/v1';
 const LEGACY_DEFAULT_MODEL = 'gpt-3.5-turbo';
 const DEFAULT_MAX_IMAGE_ATTACHMENT_BYTES = 5 * 1024 * 1024;
 const DEFAULT_MAX_TEXT_FILE_BYTES = 256 * 1024;
+const STORAGE_SOFT_LIMIT_BYTES = 2 * 1024 * 1024;
 
 type StoredProviderSettings = ProviderSettings & {
   version?: number;
@@ -32,6 +35,44 @@ export interface ProviderValidationResult {
   settings?: ProviderSettings;
   message?: string;
 }
+
+export interface AppBackupLocalStorage {
+  conversations: Conversation[];
+  activeConversationId: string | null;
+  conversationDrafts: Record<string, string>;
+  newConversationDraft: string;
+  promptTemplates: PromptTemplate[];
+  providerPresets: ProviderPreset[];
+  activeProviderPresetId: string | null;
+  legacyProviderSettings: ProviderSettings | null;
+}
+
+export interface AppBackupEnvelope {
+  backupFormatVersion: number;
+  storageSchemaVersion: number;
+  createdAt: string;
+  localStorage: AppBackupLocalStorage;
+}
+
+export interface StorageHealthSummary {
+  appDataBytes: number;
+  softLimitBytes: number;
+  overSoftLimit: boolean;
+  quarantinedRecordCount: number;
+}
+
+type StorageSnapshot = Record<string, string | null>;
+
+const APP_OWNED_STORAGE_KEYS = [
+  CONVERSATIONS_KEY,
+  ACTIVE_CONVERSATION_KEY,
+  CONVERSATION_DRAFTS_KEY,
+  NEW_CONVERSATION_DRAFT_KEY,
+  PROMPT_TEMPLATES_KEY,
+  PROVIDER_PRESETS_KEY,
+  ACTIVE_PROVIDER_PRESET_KEY,
+  PROVIDER_SETTINGS_KEY,
+] as const;
 
 export function createStorageId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -176,6 +217,8 @@ export function saveProviderPresets(presets: ProviderPreset[]) {
     name: preset.name,
     createdAt: preset.createdAt,
     updatedAt: preset.updatedAt,
+    ...(typeof preset.lastCheckedAt === 'number' ? { lastCheckedAt: preset.lastCheckedAt } : {}),
+    ...(preset.lastCheckStatus ? { lastCheckStatus: preset.lastCheckStatus } : {}),
     version: STORAGE_SCHEMA_VERSION,
   })));
 }
@@ -281,8 +324,108 @@ export function createProviderSnapshot(preset?: ProviderPreset): ProviderSnapsho
     baseUrl: normalized.baseUrl,
     model: normalized.model,
     capabilities: normalizeProviderCapabilities(normalized),
-    status: 'unchecked',
+    checkedAt: preset?.lastCheckedAt,
+    status: preset?.lastCheckStatus ?? 'unchecked',
   };
+}
+
+export function getStorageHealthSummary(): StorageHealthSummary {
+  const appDataBytes = estimateAppOwnedStorageBytes();
+  const quarantinedRecordCount = countQuarantinedStorageRecords();
+
+  return {
+    appDataBytes,
+    softLimitBytes: STORAGE_SOFT_LIMIT_BYTES,
+    overSoftLimit: appDataBytes > STORAGE_SOFT_LIMIT_BYTES,
+    quarantinedRecordCount,
+  };
+}
+
+export function exportAppBackup(createdAt = new Date().toISOString()): AppBackupEnvelope {
+  const conversations = readStoredConversationsForBackup();
+  const providerPresets = readStoredProviderPresetsForBackup();
+
+  return {
+    backupFormatVersion: BACKUP_FORMAT_VERSION,
+    storageSchemaVersion: STORAGE_SCHEMA_VERSION,
+    createdAt,
+    localStorage: {
+      conversations,
+      activeConversationId: normalizeActiveConversationId(readStoredString(ACTIVE_CONVERSATION_KEY), conversations),
+      conversationDrafts: filterConversationDrafts(readStoredConversationDraftsForBackup(), conversations),
+      newConversationDraft: readStoredString(NEW_CONVERSATION_DRAFT_KEY) ?? '',
+      promptTemplates: readStoredPromptTemplatesForBackup(),
+      providerPresets,
+      activeProviderPresetId: normalizeActiveProviderPresetId(readStoredString(ACTIVE_PROVIDER_PRESET_KEY), providerPresets),
+      legacyProviderSettings: readLegacyProviderSettingsForBackup(),
+    },
+  };
+}
+
+export function parseAppBackupJson(serializedBackup: string): AppBackupEnvelope {
+  let parsed: unknown;
+
+  try {
+    parsed = JSON.parse(serializedBackup);
+  } catch {
+    throw new Error('Backup file is not valid JSON.');
+  }
+
+  return validateAppBackupEnvelope(parsed);
+}
+
+export function validateAppBackupEnvelope(value: unknown): AppBackupEnvelope {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('Backup file must be a JSON object.');
+  }
+
+  const backup = value as Record<string, unknown>;
+
+  if (backup.backupFormatVersion !== BACKUP_FORMAT_VERSION) {
+    throw new Error(`Backup format version ${String(backup.backupFormatVersion)} is not supported.`);
+  }
+
+  if (backup.storageSchemaVersion !== STORAGE_SCHEMA_VERSION) {
+    throw new Error(`Storage schema version ${String(backup.storageSchemaVersion)} is not supported.`);
+  }
+
+  if (typeof backup.createdAt !== 'string' || Number.isNaN(Date.parse(backup.createdAt))) {
+    throw new Error('Backup file must include a valid createdAt timestamp.');
+  }
+
+  const localStorage = validateBackupLocalStorage(backup.localStorage);
+  const nextBackup: AppBackupEnvelope = {
+    backupFormatVersion: BACKUP_FORMAT_VERSION,
+    storageSchemaVersion: STORAGE_SCHEMA_VERSION,
+    createdAt: backup.createdAt,
+    localStorage,
+  };
+
+  if ('electronProviderSettings' in backup) {
+    throw new Error('electronProviderSettings is not supported in this build.');
+  }
+
+  return nextBackup;
+}
+
+export function restoreAppBackup(backup: AppBackupEnvelope) {
+  if (typeof window === 'undefined') return;
+
+  const validatedBackup = validateAppBackupEnvelope(backup);
+  const snapshot = snapshotStorageKeys(APP_OWNED_STORAGE_KEYS);
+
+  try {
+    applyBackupLocalStorage(validatedBackup.localStorage);
+  } catch (error) {
+    try {
+      restoreStorageSnapshot(snapshot);
+    } catch {
+      throw new Error('Backup restore failed and rollback could not restore the original data.');
+    }
+
+    const message = error instanceof Error ? error.message : 'Unknown localStorage write error.';
+    throw new Error(`Backup restore failed and was rolled back: ${message}`);
+  }
 }
 
 function migrateLegacyProviderSettings(): ProviderPreset[] {
@@ -322,6 +465,60 @@ function readLegacyProviderSettings(): ProviderSettings | undefined {
   return emptyToUndefined(normalizeProviderSettings(stored));
 }
 
+function readLegacyProviderSettingsForBackup(): ProviderSettings | null {
+  const stored = readStoredJsonForBackup(PROVIDER_SETTINGS_KEY);
+  if (stored === undefined || stored === null) return null;
+
+  const validation = validateOptionalProviderSettings(stored, 'localStorage.legacyProviderSettings');
+  return isLegacyDefaultProviderSettings(validation as StoredProviderSettings) ? null : validation;
+}
+
+function validateBackupLocalStorage(value: unknown): AppBackupLocalStorage {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('Backup file must include a localStorage object.');
+  }
+
+  const localStorage = value as Record<string, unknown>;
+  const conversations = validateConversationList(localStorage.conversations);
+  const activeConversationId = validateNullableString(localStorage.activeConversationId, 'activeConversationId');
+  const conversationDrafts = validateDraftMap(localStorage.conversationDrafts);
+  const newConversationDraft = validateRequiredString(localStorage.newConversationDraft, 'newConversationDraft');
+  const promptTemplates = validatePromptTemplateList(localStorage.promptTemplates);
+  const providerPresets = validateProviderPresetList(localStorage.providerPresets);
+  const activeProviderPresetId = validateNullableString(localStorage.activeProviderPresetId, 'activeProviderPresetId');
+  const legacyProviderSettings = validateOptionalProviderSettings(
+    localStorage.legacyProviderSettings,
+    'legacyProviderSettings'
+  );
+
+  const conversationIds = new Set(conversations.map(conversation => conversation.id));
+  if (activeConversationId && !conversationIds.has(activeConversationId)) {
+    throw new Error('activeConversationId must reference an imported conversation.');
+  }
+
+  for (const draftConversationId of Object.keys(conversationDrafts)) {
+    if (!conversationIds.has(draftConversationId)) {
+      throw new Error('conversationDrafts must reference imported conversations only.');
+    }
+  }
+
+  const providerPresetIds = new Set(providerPresets.map(preset => preset.id));
+  if (activeProviderPresetId && !providerPresetIds.has(activeProviderPresetId)) {
+    throw new Error('activeProviderPresetId must reference an imported provider preset.');
+  }
+
+  return {
+    conversations,
+    activeConversationId,
+    conversationDrafts,
+    newConversationDraft,
+    promptTemplates,
+    providerPresets,
+    activeProviderPresetId,
+    legacyProviderSettings,
+  };
+}
+
 function normalizeConversation(value: unknown): Conversation | null {
   if (!value || typeof value !== 'object') return null;
   const conversation = value as Partial<Conversation>;
@@ -344,6 +541,8 @@ function normalizeConversation(value: unknown): Conversation | null {
     messages,
     createdAt: conversation.createdAt,
     updatedAt: conversation.updatedAt,
+    pinned: conversation.pinned === true,
+    archived: conversation.archived === true,
     ...(conversation.provider ? { provider: normalizeProviderSnapshot(conversation.provider) } : {}),
   };
 }
@@ -410,6 +609,8 @@ function normalizeProviderPreset(value: unknown): ProviderPreset | null {
     ...normalizeProviderSettings(preset),
     createdAt: preset.createdAt,
     updatedAt: preset.updatedAt,
+    lastCheckedAt: typeof preset.lastCheckedAt === 'number' ? preset.lastCheckedAt : undefined,
+    lastCheckStatus: normalizeReachabilityStatus(preset.lastCheckStatus),
   };
 }
 
@@ -426,7 +627,7 @@ function normalizeProviderSnapshot(value: unknown): ProviderSnapshot {
     model: typeof snapshot.model === 'string' ? snapshot.model : undefined,
     capabilities: normalizeProviderCapabilities({ capabilities: snapshot.capabilities }),
     checkedAt: typeof snapshot.checkedAt === 'number' ? snapshot.checkedAt : undefined,
-    status: snapshot.status === 'reachable' || snapshot.status === 'unreachable' ? snapshot.status : 'unchecked',
+    status: normalizeReachabilityStatus(snapshot.status),
   };
 }
 
@@ -457,6 +658,225 @@ function readLocalJson(key: string, fallback: unknown): unknown {
 function writeLocalJson(key: string, value: unknown) {
   if (typeof window === 'undefined') return;
   window.localStorage.setItem(key, JSON.stringify(value));
+}
+
+function readStoredConversationsForBackup(): Conversation[] {
+  const parsed = readStoredJsonForBackup(CONVERSATIONS_KEY);
+  return parsed === undefined ? [] : validateConversationList(parsed);
+}
+
+function readStoredConversationDraftsForBackup(): Record<string, string> {
+  const parsed = readStoredJsonForBackup(CONVERSATION_DRAFTS_KEY);
+  return parsed === undefined ? {} : validateDraftMap(parsed);
+}
+
+function readStoredPromptTemplatesForBackup(): PromptTemplate[] {
+  const parsed = readStoredJsonForBackup(PROMPT_TEMPLATES_KEY);
+  return parsed === undefined ? [] : validatePromptTemplateList(parsed);
+}
+
+function readStoredProviderPresetsForBackup(): ProviderPreset[] {
+  const parsed = readStoredJsonForBackup(PROVIDER_PRESETS_KEY);
+  return parsed === undefined ? [] : validateProviderPresetList(parsed);
+}
+
+function readStoredJsonForBackup(key: string): unknown {
+  const saved = readStoredValue(key);
+  if (saved === null) return undefined;
+
+  try {
+    return JSON.parse(saved);
+  } catch {
+    throw new Error(`Stored ${key} data is malformed and cannot be exported.`);
+  }
+}
+
+function validateConversationList(value: unknown): Conversation[] {
+  if (!Array.isArray(value)) {
+    throw new Error('localStorage.conversations must be an array.');
+  }
+
+  const conversations = value.map(normalizeConversation).filter(Boolean) as Conversation[];
+  if (conversations.length !== value.length) {
+    throw new Error('localStorage.conversations contains invalid records.');
+  }
+
+  return conversations;
+}
+
+function validatePromptTemplateList(value: unknown): PromptTemplate[] {
+  if (!Array.isArray(value)) {
+    throw new Error('localStorage.promptTemplates must be an array.');
+  }
+
+  const templates = value.map(normalizePromptTemplate).filter(Boolean) as PromptTemplate[];
+  if (templates.length !== value.length) {
+    throw new Error('localStorage.promptTemplates contains invalid records.');
+  }
+
+  return templates;
+}
+
+function validateProviderPresetList(value: unknown): ProviderPreset[] {
+  if (!Array.isArray(value)) {
+    throw new Error('localStorage.providerPresets must be an array.');
+  }
+
+  const presets = value.map(normalizeProviderPreset).filter(Boolean) as ProviderPreset[];
+  if (presets.length !== value.length) {
+    throw new Error('localStorage.providerPresets contains invalid records.');
+  }
+
+  return presets;
+}
+
+function validateDraftMap(value: unknown): Record<string, string> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('localStorage.conversationDrafts must be an object.');
+  }
+
+  const entries = Object.entries(value);
+  if (!entries.every(([key, draft]) => typeof key === 'string' && typeof draft === 'string')) {
+    throw new Error('localStorage.conversationDrafts must contain only string values.');
+  }
+
+  return Object.fromEntries(entries);
+}
+
+function validateNullableString(value: unknown, fieldName: string): string | null {
+  if (value === null) return null;
+  if (typeof value === 'string') return value;
+  throw new Error(`${fieldName} must be a string or null.`);
+}
+
+function validateRequiredString(value: unknown, fieldName: string): string {
+  if (typeof value === 'string') return value;
+  throw new Error(`${fieldName} must be a string.`);
+}
+
+function validateOptionalProviderSettings(value: unknown, fieldName: string): ProviderSettings | null {
+  if (value === null) return null;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error(`${fieldName} must be a provider settings object or null.`);
+  }
+
+  const validation = validateProviderSettings(value as ProviderSettings);
+  if (!validation.ok || !validation.settings) {
+    throw new Error(validation.message || `${fieldName} is invalid.`);
+  }
+
+  return validation.settings;
+}
+
+function applyBackupLocalStorage(localStorage: AppBackupLocalStorage) {
+  saveConversations(localStorage.conversations);
+  saveActiveConversationId(localStorage.activeConversationId);
+  saveConversationDrafts(localStorage.conversationDrafts);
+  saveDraftForConversation(null, localStorage.newConversationDraft);
+  savePromptTemplates(localStorage.promptTemplates);
+  saveProviderPresets(localStorage.providerPresets);
+  saveActiveProviderPresetId(localStorage.activeProviderPresetId);
+  saveLegacyProviderSettings(localStorage.legacyProviderSettings);
+}
+
+function saveLegacyProviderSettings(settings: ProviderSettings | null) {
+  if (typeof window === 'undefined') return;
+
+  if (!settings) {
+    window.localStorage.removeItem(PROVIDER_SETTINGS_KEY);
+    return;
+  }
+
+  writeLocalJson(PROVIDER_SETTINGS_KEY, settings);
+}
+
+function snapshotStorageKeys(keys: readonly string[]): StorageSnapshot {
+  const snapshot: StorageSnapshot = {};
+
+  for (const key of keys) {
+    snapshot[key] = readStoredValue(key);
+  }
+
+  return snapshot;
+}
+
+function restoreStorageSnapshot(snapshot: StorageSnapshot) {
+  if (typeof window === 'undefined') return;
+
+  for (const [key, value] of Object.entries(snapshot)) {
+    if (value === null) {
+      window.localStorage.removeItem(key);
+    } else {
+      window.localStorage.setItem(key, value);
+    }
+  }
+}
+
+function readStoredValue(key: string): string | null {
+  if (typeof window === 'undefined') return null;
+
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function readStoredString(key: string): string | null {
+  const value = readStoredValue(key);
+  return typeof value === 'string' ? value : null;
+}
+
+function normalizeActiveConversationId(activeConversationId: string | null, conversations: Conversation[]): string | null {
+  return conversations.some(conversation => conversation.id === activeConversationId) ? activeConversationId : null;
+}
+
+function normalizeActiveProviderPresetId(activeProviderPresetId: string | null, presets: ProviderPreset[]): string | null {
+  return presets.some(preset => preset.id === activeProviderPresetId) ? activeProviderPresetId : null;
+}
+
+function filterConversationDrafts(
+  drafts: Record<string, string>,
+  conversations: Conversation[]
+): Record<string, string> {
+  const conversationIds = new Set(conversations.map(conversation => conversation.id));
+  return Object.fromEntries(
+    Object.entries(drafts).filter(([conversationId]) => conversationIds.has(conversationId))
+  );
+}
+
+function normalizeReachabilityStatus(value: unknown): ProviderReachabilityStatus {
+  return value === 'reachable' || value === 'unreachable' ? value : 'unchecked';
+}
+
+function estimateAppOwnedStorageBytes(): number {
+  return APP_OWNED_STORAGE_KEYS.reduce((total, key) => {
+    const value = readStoredValue(key);
+    return total + estimateStorageEntryBytes(key, value);
+  }, 0);
+}
+
+function countQuarantinedStorageRecords(): number {
+  if (typeof window === 'undefined') return 0;
+
+  let count = 0;
+  try {
+    for (let index = 0; index < window.localStorage.length; index += 1) {
+      const key = window.localStorage.key(index);
+      if (key && APP_OWNED_STORAGE_KEYS.some(prefix => key.startsWith(`${prefix}:corrupt:`))) {
+        count += 1;
+      }
+    }
+  } catch {
+    return 0;
+  }
+
+  return count;
+}
+
+function estimateStorageEntryBytes(key: string, value: string | null): number {
+  if (value === null) return 0;
+  return key.length + value.length;
 }
 
 function positiveNumber(value: unknown): number | undefined {

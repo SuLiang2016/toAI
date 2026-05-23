@@ -33,6 +33,8 @@ export interface Conversation {
   messages: Message[];
   createdAt: number;
   updatedAt: number;
+  pinned?: boolean;
+  archived?: boolean;
   provider?: ProviderSnapshot;
 }
 
@@ -70,7 +72,11 @@ export interface ProviderPreset extends ProviderSettings {
   name: string;
   createdAt: number;
   updatedAt: number;
+  lastCheckedAt?: number;
+  lastCheckStatus?: ProviderReachabilityStatus;
 }
+
+export type ProviderReachabilityStatus = 'unchecked' | 'reachable' | 'unreachable';
 
 export interface ProviderSnapshot {
   id?: string;
@@ -79,7 +85,7 @@ export interface ProviderSnapshot {
   model?: string;
   capabilities: ProviderCapabilities;
   checkedAt?: number;
-  status?: 'unchecked' | 'reachable' | 'unreachable';
+  status?: ProviderReachabilityStatus;
 }
 
 export interface PromptTemplate {

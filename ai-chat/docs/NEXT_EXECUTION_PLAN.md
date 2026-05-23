@@ -4,22 +4,20 @@ This file tracks the currently approved execution lane. Update it when the team 
 
 ## Current Execution Lane
 
-Maintainability and verification foundation.
+No active implementation lane. The roadmap Phase 1-6 batch closed on 2026-05-23.
 
 ## Target Result
 
-- Reduce orchestration complexity in the main chat shell.
-- Preserve existing chat/provider/template/diagnostics behavior.
-- Make `pnpm test` run executable behavior-level checks in addition to the contract checker.
-- Refresh planning docs so future work starts from the real current baseline.
+- Preserve the completed 2026-05-23 execution evidence for roadmap phases 1-6.
+- Keep public distribution explicitly blocked until signing and update prerequisites exist.
+- Start a new lane only after choosing between cross-version installer upgrade evidence, fresh interactive packaged smoke, or a new product direction.
 
 ## Work Items
 
-1. Extract `ChatBox.tsx` by UI surface.
-2. Move reusable client chat helpers out of `useChat.ts`.
-3. Add built-in Node behavior tests for streaming, storage, and provider config.
-4. Keep `scripts/verify-upgrade.mjs` as a fast boundary check and update it to verify the new module boundaries.
-5. Refresh roadmap/planning docs after the code and verification pass are stable.
+1. Preserve `docs/RELEASE_RC_EVIDENCE_2026-05-20.md` as already-recorded baseline evidence.
+2. Preserve `docs/RELEASE_RC_EVIDENCE_2026-05-23.md` as the 2026-05-23 delta-closure record.
+3. Keep `docs/NEXT_UPGRADE_ROADMAP.md` and `.omx/plans/roadmap-ai-chat-next-stage-product-2026-05-23.md` aligned with the completed batch.
+4. Do not open a public-distribution lane until signing, update metadata hosting, rollback policy, and trust-policy ownership exist.
 
 ## Required Verification
 
@@ -28,23 +26,24 @@ pnpm lint
 pnpm typecheck
 pnpm test
 pnpm build
+pnpm electron-build
+pnpm electron-installer
 ```
+
+- Run `pnpm electron-dev` or packaged interactive smoke only when a future lane changes runtime-only Electron behavior or explicitly refreshes packaged UI evidence.
 
 ## Manual Smoke
 
-1. Create a new conversation and send a message.
-2. Stop generation and verify the UI recovers cleanly.
-3. Rename, search, and delete a conversation.
-4. Insert, edit, and delete a prompt template.
-5. Save and activate a provider preset, then run connectivity check.
-6. Open About and confirm diagnostics/log actions still render.
-7. Reload and verify persistence still works.
+1. If refreshing packaged UI evidence, launch the packaged desktop app.
+2. Confirm startup diagnostics, About, backup export/restore, and sanitized log actions.
+3. Capture whether each step is `already evidenced`, `freshly rerun`, or `deferred`.
 
 ## Stop Condition
 
 Stop only when:
 
-- extracted boundaries are in place,
-- verification commands have fresh passing output,
-- known gaps are recorded,
-- docs reflect the new baseline instead of the pre-hardening plan.
+- the completed batch remains documented without contradictory backlog language,
+- verification commands and packaged-artifact evidence stay traceable to a dated record,
+- known gaps remain recorded as gaps rather than implied passes,
+- public distribution gates remain blocked or deferred with owner notes,
+- docs reflect the completed 2026-05-23 roadmap batch rather than the older in-flight release lane.

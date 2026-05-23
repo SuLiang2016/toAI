@@ -79,6 +79,11 @@ assert.match(storage, /CONVERSATION_DRAFTS_KEY = 'conversationDrafts'/, 'storage
 assert.match(storage, /PROMPT_TEMPLATES_KEY = 'promptTemplates'/, 'storage helpers must own template key');
 assert.match(storage, /PROVIDER_PRESETS_KEY = 'providerPresets'/, 'storage helpers must own provider preset key');
 assert.match(storage, /loadStoredConversations/, 'storage helpers must load conversations');
+assert.match(storage, /BACKUP_FORMAT_VERSION = 1/, 'storage helpers must declare backup format version');
+assert.match(storage, /exportAppBackup/, 'storage helpers must export a versioned app backup');
+assert.match(storage, /parseAppBackupJson/, 'storage helpers must parse backup JSON');
+assert.match(storage, /restoreAppBackup/, 'storage helpers must restore validated backups');
+assert.match(storage, /restoreStorageSnapshot/, 'storage helpers must roll back failed restores');
 assert.match(storage, /normalizeConversation/, 'storage helpers must validate stored conversations');
 assert.match(storage, /quarantineCorruptedStorage/, 'storage helpers must quarantine malformed localStorage records');
 assert.match(storage, /loadStoredPromptTemplates/, 'storage helpers must validate prompt templates');
@@ -86,8 +91,12 @@ assert.match(storage, /loadStoredProviderPresets/, 'storage helpers must validat
 assert.match(storage, /migrateLegacyProviderSettings/, 'storage helpers must migrate legacy provider settings');
 assert.match(storage, /validateProviderSettings/, 'storage helpers must validate provider settings');
 assert.match(storage, /createProviderSnapshot/, 'storage helpers must create per-conversation provider snapshots');
+assert.match(storage, /getStorageHealthSummary/, 'storage helpers must expose storage health summary');
 assert.match(storage, /pruneConversationDrafts/, 'storage helpers must clean stale drafts');
 assert.match(storage, /status: message\.status \?\? 'complete'/, 'storage helpers must preserve explicit message status while defaulting legacy records');
+assert.match(storage, /pinned: conversation\.pinned === true/, 'storage helpers must preserve conversation pin state');
+assert.match(storage, /archived: conversation\.archived === true/, 'storage helpers must preserve conversation archive state');
+assert.match(storage, /lastCheckStatus/, 'storage helpers must persist preset reachability state');
 
 const hook = text('src/hooks/useChat.ts');
 assert.match(hook, /consumeSseBuffer/, 'useChat must use pure stream parser');
@@ -135,7 +144,7 @@ assert.doesNotMatch(route, /Unexpected any|:\s*any/, 'API route must avoid any')
 const inputArea = text('src/components/InputArea.tsx');
 assert.match(inputArea, /value: string/, 'InputArea must accept controlled text value');
 assert.match(inputArea, /templates: PromptTemplate\[\]/, 'InputArea must accept prompt templates');
-assert.match(inputArea, /supportsAttachments: boolean/, 'InputArea must receive active attachment capability');
+assert.match(inputArea, /providerCapabilities: ProviderCapabilities/, 'InputArea must receive active provider capabilities');
 assert.match(inputArea, /Image attachments are disabled for the active provider/, 'InputArea must block unsupported image attachments clearly');
 assert.match(inputArea, /event\.ctrlKey/, 'InputArea must handle Ctrl+Enter send shortcut');
 assert.match(inputArea, /event\.metaKey/, 'InputArea must handle Meta+Enter send shortcut');
@@ -144,6 +153,7 @@ assert.match(inputArea, /event\.key === 'Escape' && isLoading/, 'InputArea must 
 assert.match(inputArea, /URL\.revokeObjectURL/, 'InputArea must release image preview object URLs');
 assert.match(inputArea, /slashRange/, 'InputArea must track slash command ranges');
 assert.match(inputArea, /ArrowDown/, 'InputArea must support template picker keyboard navigation');
+assert.match(inputArea, /Streaming on/, 'InputArea must show streaming capability hint');
 
 const chatBox = text('src/components/ChatBox.tsx');
 assert.match(chatBox, /ChatSidebar/, 'ChatBox must compose an extracted sidebar surface');
@@ -153,15 +163,30 @@ assert.match(chatBox, /TemplateEditorModal/, 'ChatBox must compose an extracted 
 assert.match(chatBox, /RenameConversationModal/, 'ChatBox must compose an extracted rename modal surface');
 assert.match(chatBox, /loadStoredConversations/, 'ChatBox must load conversations through storage helpers');
 assert.match(chatBox, /filteredConversations/, 'ChatBox must support conversation search/filter');
+assert.match(chatBox, /showArchived/, 'ChatBox must support archived conversation filtering');
 assert.match(chatBox, /renameConversationId/, 'ChatBox must support explicit conversation rename');
+assert.match(chatBox, /toggleConversationPinned/, 'ChatBox must support conversation pinning');
+assert.match(chatBox, /toggleConversationArchived/, 'ChatBox must support conversation archiving');
 assert.match(chatBox, /pruneConversationDrafts/, 'ChatBox must expose stale draft cleanup');
 assert.match(chatBox, /handleConversationKeyDown/, 'ChatBox must support keyboard navigation in conversation list');
-assert.match(chatBox, /Provider: \{currentProviderLabel\}/, 'ChatBox must show active provider without secrets');
+assert.match(chatBox, /Provider: \{currentProviderLabel\} \| \{currentProviderStatusLabel\}/, 'ChatBox must show active provider status without secrets');
+assert.match(chatBox, /event\.key\.toLowerCase\(\) === 'k'/, 'ChatBox must support Ctrl/Cmd+K search shortcut');
+assert.match(chatBox, /event\.key\.toLowerCase\(\) === 'n'/, 'ChatBox must support Alt+N new-chat shortcut');
 assert.match(chatBox, /\/api\/provider\/check/, 'ChatBox must call provider connectivity check');
 assert.match(chatBox, /createProviderSnapshot/, 'ChatBox must write provider metadata snapshots');
+assert.match(chatBox, /getStorageHealthSummary/, 'ChatBox must surface storage health warnings');
 assert.match(chatBox, /getAppInfo/, 'ChatBox must render app-info/about data');
+assert.match(chatBox, /exportAppBackup/, 'ChatBox must export versioned backups');
+assert.match(chatBox, /parseAppBackupJson/, 'ChatBox must validate backup files before restore');
+assert.match(chatBox, /restoreAppBackup/, 'ChatBox must restore validated backups');
+assert.match(chatBox, /window\.confirm/, 'ChatBox must require explicit restore confirmation');
+assert.match(chatBox, /window\.location\.reload\(\)/, 'ChatBox must reload after successful restore');
 assert.match(chatBox, /exportLogs/, 'ChatBox must expose sanitized log export');
-assert.doesNotMatch(chatBox, /apiKey|API Key.*input|key.*localStorage/i, 'Provider preset UI must not store or render API keys');
+assert.doesNotMatch(
+  chatBox,
+  /apiKey|API Key.*input|localStorage.*(?:api[_-]?key|token|secret|password)|(?:api[_-]?key|token|secret|password).*localStorage/i,
+  'Provider preset UI must not store or render API keys'
+);
 assert.match(chatBox, /navigator\.clipboard\.writeText/, 'ChatBox must copy message/code text to clipboard');
 assert.match(chatBox, /removeLatestAssistantMessage\(\)/, 'Regenerate must remove only the latest assistant response');
 assert.match(chatBox, /restoreMessages\(previousMessages\)/, 'Regenerate must restore history when resend fails');
@@ -174,6 +199,24 @@ const messageBubble = text('src/components/MessageBubble.tsx');
 assert.match(messageBubble, /message\.status/, 'MessageBubble must surface partial/aborted/error message state');
 assert.match(messageBubble, /onCopyCode\(code\)/, 'MessageBubble must expose code-block copy action');
 assert.match(messageBubble, /onEditResend\(message\)/, 'MessageBubble must expose edit-resend action');
+
+const aboutModal = text('src/components/chatbox/AboutModal.tsx');
+assert.match(aboutModal, /Export backup/, 'About modal must expose backup export');
+assert.match(aboutModal, /Restore backup/, 'About modal must expose backup restore');
+assert.match(aboutModal, /replace-only/, 'About modal must describe replace-only restore semantics');
+assert.match(aboutModal, /Invalid backups do not change current data/, 'About modal must describe zero-mutation invalid backup behavior');
+assert.match(aboutModal, /Long-term storage strategy/, 'About modal must explain the current storage strategy');
+
+const providerModal = text('src/components/chatbox/ProviderPresetsModal.tsx');
+assert.match(providerModal, /Max image bytes/, 'provider modal must expose image byte limits');
+assert.match(providerModal, /Max text file bytes/, 'provider modal must expose text byte limits');
+assert.match(providerModal, /last connectivity result/, 'provider modal must explain stored reachability metadata');
+
+const sidebar = text('src/components/chatbox/ChatSidebar.tsx');
+assert.match(sidebar, /Archived \(/, 'sidebar must expose archived conversation view');
+assert.match(sidebar, /Ctrl\/Cmd\+K search/, 'sidebar must document keyboard search shortcut');
+assert.match(sidebar, /Pin conversation/, 'sidebar must expose conversation pinning');
+assert.match(sidebar, /Archive conversation/, 'sidebar must expose conversation archiving');
 
 const electronMain = text('electron/main.js');
 assert.match(electronMain, /nodeIntegration:\s*false/, 'Electron must keep nodeIntegration disabled');
@@ -196,6 +239,32 @@ const roadmap = text('docs/NEXT_UPGRADE_ROADMAP.md');
 assert.match(roadmap, /Execution Evidence/, 'roadmap must record execution evidence');
 assert.match(roadmap, /Phase 1/, 'roadmap must keep phase references');
 assert.match(roadmap, /pnpm lint/, 'roadmap must record verification commands');
+assert.match(roadmap, /pnpm electron-installer/, 'roadmap must record installer verification commands');
+
+const releaseChecklist = text('docs/RELEASE_CHECKLIST.md');
+assert.match(releaseChecklist, /internal RC evidence lane/, 'release checklist must frame the lane as internal evidence');
+assert.match(releaseChecklist, /STATIC PASS/, 'release checklist must name the static gate state');
+assert.match(releaseChecklist, /UNPACKED SMOKE PASS/, 'release checklist must name the unpacked smoke gate state');
+assert.match(releaseChecklist, /INSTALLER SMOKE PASS/, 'release checklist must name the installer smoke gate state');
+assert.match(releaseChecklist, /BLOCKED/, 'release checklist must name blocked gate states');
+assert.match(releaseChecklist, /DEFERRED/, 'release checklist must name deferred gate states');
+assert.match(releaseChecklist, /pnpm electron-installer/, 'release checklist must include installer verification');
+
+const releaseEvidenceTemplate = text('docs/RELEASE_EVIDENCE_TEMPLATE.md');
+assert.match(releaseEvidenceTemplate, /App version:/, 'release evidence template must capture app version');
+assert.match(releaseEvidenceTemplate, /Artifact path:/, 'release evidence template must capture artifact path');
+assert.match(releaseEvidenceTemplate, /OS\/profile:/, 'release evidence template must capture OS/profile');
+assert.match(releaseEvidenceTemplate, /Gate state:/, 'release evidence template must capture gate state');
+
+const releaseEvidence = text('docs/RELEASE_RC_EVIDENCE_2026-05-20.md');
+assert.match(releaseEvidence, /STATIC PASS/, 'release evidence must record the static gate');
+assert.match(releaseEvidence, /INSTALLER SMOKE PASS/, 'release evidence must record installer smoke');
+assert.match(releaseEvidence, /BLOCKED/, 'release evidence must record public release blockers');
+
+const releaseEvidenceDelta = text('docs/RELEASE_RC_EVIDENCE_2026-05-23.md');
+assert.match(releaseEvidenceDelta, /freshly rerun/i, 'delta release evidence must record freshly rerun entries');
+assert.match(releaseEvidenceDelta, /already evidenced/i, 'delta release evidence must preserve already-evidenced entries');
+assert.match(releaseEvidenceDelta, /DEFERRED/, 'delta release evidence must keep deferred gaps explicit');
 
 const optimizationDirections = text('docs/NEXT_OPTIMIZATION_DIRECTIONS.md');
 assert.match(optimizationDirections, /Maintainability/, 'optimization directions must track the maintainability direction');
