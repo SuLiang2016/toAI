@@ -1,0 +1,13 @@
+{
+  "date": "2026-05-24",
+  "oldArtifact": "C:\\suliang\\ai-chat-old\\ai-chat",
+  "sourceCommit": "faccc58",
+  "checks": [
+    "current build loads historical conversation records",
+    "current build loads historical provider presets and defaults reachability metadata",
+    "current build exports a backup from upgraded historical state",
+    "current build restores that backup without losing upgraded state",
+    "unrelated local window-state data remains preserved during restore"
+  ],
+  "boundary": "The historical build predates backup export/restore UI, so the validated boundary is historical local data -> current migration/load -> current backup export/restore. This does not prove installer-version metadata behavior because both builds report 1.0.0."
+}

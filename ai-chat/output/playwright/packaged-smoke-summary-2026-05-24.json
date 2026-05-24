@@ -1,0 +1,24 @@
+{
+  "date": "2026-05-24",
+  "unpacked": {
+    "startupPass": true,
+    "aboutPass": true,
+    "diagnosticsPass": true,
+    "exportLogsPass": true,
+    "openLogsPass": true,
+    "backupExportPass": true,
+    "backupRestorePass": true,
+    "retainedDataAcrossRelaunchPass": false
+  },
+  "installed": {
+    "startupPass": true,
+    "aboutPass": true,
+    "diagnosticsPass": true,
+    "exportLogsPass": true,
+    "openLogsPass": true,
+    "backupExportPass": false,
+    "backupRestorePass": false,
+    "retainedDataAcrossRelaunchPass": false
+  },
+  "note": "Installed backup export/restore was not claimed separately; the critical blocker is retained data across relaunch because packaged production uses an ephemeral localhost origin."
+}

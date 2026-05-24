@@ -1,0 +1,92 @@
+{
+  "backupFormatVersion": 1,
+  "storageSchemaVersion": 2,
+  "createdAt": "2026-05-23T17:36:13.126Z",
+  "localStorage": {
+    "conversations": [
+      {
+        "id": "smoke-conv",
+        "title": "Smoke conversation",
+        "messages": [
+          {
+            "id": "user-1",
+            "role": "user",
+            "content": "hello",
+            "timestamp": 3,
+            "status": "complete"
+          },
+          {
+            "id": "assistant-1",
+            "role": "assistant",
+            "content": "world",
+            "timestamp": 4,
+            "status": "complete"
+          }
+        ],
+        "createdAt": 1,
+        "updatedAt": 1779557772266,
+        "pinned": false,
+        "archived": false,
+        "provider": {
+          "name": "Smoke provider",
+          "baseUrl": "https://provider.example/v1",
+          "model": "smoke-model",
+          "capabilities": {
+            "supportsAttachments": true,
+            "supportsImages": true,
+            "maxImageAttachmentBytes": 1024,
+            "maxTextFileBytes": 2048,
+            "streaming": true
+          },
+          "status": "unchecked"
+        }
+      }
+    ],
+    "activeConversationId": "smoke-conv",
+    "conversationDrafts": {
+      "smoke-conv": "smoke draft"
+    },
+    "newConversationDraft": "",
+    "promptTemplates": [
+      {
+        "id": "tpl-1",
+        "title": "Smoke template",
+        "content": "Template body",
+        "createdAt": 5,
+        "updatedAt": 6
+      }
+    ],
+    "providerPresets": [
+      {
+        "id": "preset-1",
+        "name": "Smoke preset",
+        "baseUrl": "https://provider.example/v1",
+        "model": "smoke-model",
+        "supportsAttachments": true,
+        "capabilities": {
+          "supportsAttachments": true,
+          "supportsImages": true,
+          "maxImageAttachmentBytes": 1024,
+          "maxTextFileBytes": 2048,
+          "streaming": true
+        },
+        "createdAt": 7,
+        "updatedAt": 8,
+        "lastCheckStatus": "unchecked"
+      }
+    ],
+    "activeProviderPresetId": "preset-1",
+    "legacyProviderSettings": {
+      "baseUrl": "https://provider.example/v1",
+      "model": "smoke-model",
+      "supportsAttachments": true,
+      "capabilities": {
+        "supportsAttachments": true,
+        "supportsImages": true,
+        "maxImageAttachmentBytes": 5242880,
+        "maxTextFileBytes": 262144,
+        "streaming": true
+      }
+    }
+  }
+}

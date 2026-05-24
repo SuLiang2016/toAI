@@ -48,7 +48,7 @@ This evidence lane preserves the completed 2026-05-20 internal RC baseline, the 
 - Backup file path: `C:\suliang\toAI\ai-chat\output\playwright\packaged-smoke-unpacked-backup-2026-05-24.json`
 - Evidence mode: `freshly rerun`
 - Gate state: `UNPACKED SMOKE PASS`
-- Owner / prerequisite note: this proves same-run packaged About/diagnostics/log/backup actions only; relaunch retention is recorded separately as blocked
+- Owner / prerequisite note: this proves same-run packaged About/diagnostics/log/backup actions only; packaged relaunch retention now has separate pass evidence in Record 6
 
 ## Record 4
 
@@ -63,7 +63,7 @@ This evidence lane preserves the completed 2026-05-20 internal RC baseline, the 
 - Backup file path: `n/a`
 - Evidence mode: `freshly rerun`
 - Gate state: `INSTALLER SMOKE PASS`
-- Owner / prerequisite note: installed startup works, but retained-data verification is blocked separately because the packaged production origin changes across relaunches
+- Owner / prerequisite note: installed startup works, and packaged relaunch retention now has separate pass evidence in Record 6; real installer-version upgrade evidence is still separate work
 
 ## Record 5
 

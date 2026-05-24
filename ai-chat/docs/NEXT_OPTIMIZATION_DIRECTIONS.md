@@ -16,9 +16,28 @@ The current app already includes:
 - per-conversation provider snapshots,
 - extracted streaming and storage helpers,
 - sanitized Electron diagnostics and log export/open actions,
-- a contract verification script in `scripts/verify-upgrade.mjs`.
+- a contract verification script in `scripts/verify-upgrade.mjs`,
+- dated packaged relaunch retention evidence for unpacked and installed executables.
 
-The next optimization cycle should stop treating these as backlog items and instead focus on what still limits safe iteration.
+The next optimization cycle should stop treating the completed reliability work as backlog and instead focus on what still limits safe iteration.
+
+## Current Release Gap
+
+Fresh 2026-05-24 evidence now exists for:
+
+- the full static gate,
+- packaging via `pnpm electron-build` and `pnpm electron-installer`,
+- unpacked About/startup diagnostics/log export/open plus current-run backup export/restore,
+- installed startup/About/log export/open,
+- historical local-data compatibility via the equivalent worktree artifact at `faccc58`,
+- packaged relaunch retention after the stable packaged localhost-origin fix.
+
+The current release gap is no longer packaged retained data. The remaining release lane is real installer-version upgrade evidence:
+
+- packaged production now keeps a stable `http://127.0.0.1:<port>` origin across relaunches,
+- browser `localStorage` remains the current canonical store and now has dated packaged relaunch evidence for the current build,
+- cross-version installer upgrade evidence still needs one real old-installed-build -> current-installed-build validation artifact,
+- public distribution is still blocked by external signing, update, rollback, and trust-policy prerequisites.
 
 ## Direction 1: Maintainability And Verification Foundation (Completed 2026-05-20)
 
@@ -35,18 +54,6 @@ Future follow-ups for this area:
 - preserve the extracted UI boundaries instead of collapsing behavior back into `ChatBox.tsx`,
 - revisit browser or Electron automation only when dependency or workflow tradeoffs are explicit.
 
-Primary touchpoints:
-
-- `src/components/ChatBox.tsx`
-- `src/components/chatbox/*`
-- `src/hooks/useChat.ts`
-- `src/lib/chat-client.ts`
-- `src/lib/storage.ts`
-- `src/lib/streaming.ts`
-- `src/server/ai/config.ts`
-- `scripts/run-behavior-tests.mjs`
-- `scripts/*.behavior.test.mjs`
-
 ## Direction 2: Data Portability And Recovery (Completed 2026-05-20)
 
 Outcome delivered in the current baseline:
@@ -62,27 +69,28 @@ Future follow-ups for this area:
 - explicit installer upgrade compatibility testing across releases,
 - a later revisit of whether `localStorage` should stay canonical long term.
 
-## Direction 3: Release Readiness (Completed 2026-05-23)
+## Direction 3: Release Readiness (Completed 2026-05-23 baseline, active follow-up lane remains)
 
 Goal: move from local packaging success to an internal RC evidence lane with explicit public-release blockers.
 
 Outcome delivered in the current baseline:
 
 - 2026-05-20 internal RC baseline evidence remains preserved.
-- 2026-05-23 reran static verification and installer packaging after the roadmap Phase 2-5 batch.
-- release evidence is now explicitly classified as `already evidenced`, `freshly rerun`, or `deferred`.
+- 2026-05-23 reran static verification and installer packaging after the roadmap batch.
+- 2026-05-24 added packaged relaunch retention evidence after the stable-origin fix.
+- release evidence is now explicitly classified as `already evidenced`, `freshly rerun`, `deferred`, or blocked gate states.
 - public distribution remains blocked by signing, update-channel, rollback, and trust-policy prerequisites.
 
 Candidate improvements:
 
-- Decide signing ownership and secret storage before enabling public installers.
-- Define stable/beta/rollback update channels before any auto-update work.
-- Refresh interactive packaged UI smoke only when a later lane changes packaged behavior.
+- capture one real installer-version upgrade path with dated artifacts,
+- decide signing ownership and secret storage before enabling public installers,
+- define stable/beta/rollback update channels before any auto-update work.
 
 Acceptance signals:
 
 - Release steps are reproducible.
-- Installer packaging evidence stays traceable to dated records.
+- Installer packaging and packaged retention evidence stay traceable to dated records.
 - Auto-update remains deferred until the required infra exists.
 - Public distribution remains blocked until signing and update prerequisites exist.
 
@@ -97,18 +105,13 @@ Outcome delivered in the current baseline:
 - `Ctrl/Cmd+K` focuses conversation search and `Alt+N` starts a new chat,
 - recovery hints surface when local records were previously quarantined.
 
-Acceptance signals:
-
-- UX work lands on clearer component boundaries instead of expanding a monolithic shell.
-- Layout changes do not regress provider/template/draft behavior.
-
 ## Direction 5: Backup Enhancements And Local Data Strategy (Completed 2026-05-23 baseline pass)
 
 Outcome delivered in the current baseline:
 
 - the app now shows a soft-limit warning when app-owned local data grows large,
 - About now explains the current local-data strategy and replace-only restore contract,
-- roadmap docs now state that `localStorage` remains canonical until a desktop-owned store is justified.
+- roadmap docs now state that `localStorage` remains the canonical baseline and now has packaged-production evidence for a stable relaunch origin.
 
 Future follow-ups:
 
@@ -128,6 +131,6 @@ Current status:
 
 Recommended order from the current baseline:
 
-1. Cross-version installer upgrade evidence when an old-version artifact is available.
-2. Fresh interactive packaged smoke for About, backup export/restore, and log actions when a packaging-refresh lane is opened.
-3. External ownership decisions for signing, update metadata, rollback, and public trust policy.
+1. Run one real installer-version upgrade path with dated evidence.
+2. Preserve the packaged relaunch retention evidence and keep release docs aligned as the upgrade lane changes.
+3. Resolve external ownership decisions for signing, update metadata, rollback, and public trust policy.

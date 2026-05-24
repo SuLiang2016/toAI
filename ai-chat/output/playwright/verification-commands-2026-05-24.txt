@@ -1,0 +1,21 @@
+pnpm lint
+- result: PASS
+
+pnpm typecheck
+- result: PASS
+
+pnpm test
+- result: PASS
+- detail: 31 behavior tests passed; upgrade verification checks passed
+
+pnpm build
+- result: PASS
+- detail: built routes `/`, `/api/chat`, `/api/provider/check`
+
+pnpm electron-build
+- result: PASS
+- detail: refreshed `dist/win-unpacked/AI Chat.exe`
+
+pnpm electron-installer
+- result: PASS
+- detail: refreshed `dist/AI Chat Setup 1.0.0.exe` and `.blockmap`; signing skipped because no signing info exists

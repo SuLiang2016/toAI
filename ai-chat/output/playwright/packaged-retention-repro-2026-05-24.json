@@ -1,0 +1,15 @@
+{
+  "date": "2026-05-24",
+  "appPath": "C:\\Users\\admin\\AppData\\Local\\Programs\\ai-chat\\AI Chat.exe",
+  "firstLaunch": {
+    "href": "http://127.0.0.1:55918/",
+    "origin": "http://127.0.0.1:55918",
+    "existing": null
+  },
+  "secondLaunch": {
+    "href": "http://127.0.0.1:55929/",
+    "origin": "http://127.0.0.1:55929",
+    "existing": null
+  },
+  "finding": "Production Electron launches a fresh embedded Next server on a new localhost port each run. Because app state is stored in browser localStorage, relaunches hit a different origin and do not retain prior conversation data across runs."
+}

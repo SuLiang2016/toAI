@@ -1,6 +1,10 @@
 # AI Chat Next Upgrade Roadmap
 
-This roadmap is the full next-stage upgrade direction for AI Chat. It starts from the completed MVP-plus baseline and plans the next mature-product pass.
+Status: roadmap baseline completed; keep this file for roadmap rationale, execution history, and remaining release-gap context.
+
+This roadmap captures the full next-stage upgrade direction for AI Chat. The phase plan below was executed across the 2026-05-19 through 2026-05-23 batches, so it should not be treated as the live step-by-step execution checklist.
+
+Use `docs/NEXT_EXECUTION_PLAN.md` and `docs/PENDING_RELEASE_HANDOFF_2026-05-24.md` for the current active lane. The remaining unresolved release work is one real installer-version upgrade artifact plus the already-documented external public-distribution prerequisites.
 
 ## Product Direction
 
@@ -353,7 +357,7 @@ Execution date: 2026-05-23.
 Roadmap Phase 1-6 completion batch:
 
 - Phase 1 RC evidence delta closure: preserved the 2026-05-20 internal RC baseline, reran fresh static verification, rebuilt installer artifacts, and recorded the delta-closure evidence in `docs/RELEASE_RC_EVIDENCE_2026-05-23.md`.
-- Phase 2 cross-version compatibility evidence: behavior tests and a 2026-05-24 equivalent historical-artifact run now prove legacy conversation records, legacy provider presets, provider snapshots, and current backup restore boundaries; installed relaunch retention remains blocked until packaged production stops changing the browser origin across launches.
+- Phase 2 cross-version compatibility evidence: behavior tests and a 2026-05-24 equivalent historical-artifact run now prove legacy conversation records, legacy provider presets, provider snapshots, and current backup restore boundaries; packaged relaunch retention now has a separate 2026-05-24 pass artifact, while a real installer-version upgrade path is still missing.
 - Phase 3 UX depth: the sidebar now supports pin/archive organization, archived/inbox switching, clearer empty states, `Ctrl/Cmd+K` search focus, `Alt+N` new chat, and visible recovery hints when corrupted local records were previously quarantined.
 - Phase 4 provider/model workflow depth: provider presets now store richer capability metadata, preserve last connectivity status, expose capability summaries in the settings modal, and drive dynamic attachment limits in the input area.
 - Phase 5 backup enhancements and local data strategy: the app now surfaces local-storage soft-limit warnings, exposes a storage-health summary in About, and documents that `localStorage` remains canonical until a desktop-owned store is justified.
@@ -369,9 +373,9 @@ Fresh verification results:
 
 Known gaps after this batch:
 
-- Packaged About, backup export/restore, and sanitized log actions now have fresh 2026-05-24 direct evidence, but the retained-data path across relaunch does not.
+- Packaged About, backup export/restore, sanitized log actions, and packaged relaunch retention now all have fresh 2026-05-24 evidence artifacts.
 - Provider connectivity still requires a valid local `AI_API_KEY` or `OPENAI_API_KEY` for a real end-to-end reachability proof.
-- Cross-version installer upgrade retention is blocked by packaged retained-data loss until the production storage boundary is stabilized.
+- Cross-version installer upgrade retention is still missing one real old-version to current-version installer path artifact.
 - Public distribution remains blocked until external ownership exists for signing, update metadata, rollback policy, and trust policy.
 
 ## ADR
