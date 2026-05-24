@@ -7,7 +7,7 @@ This evidence lane preserves the completed 2026-05-20 internal RC baseline, the 
 
 ## Record 1
 
-- App version: `1.0.0`
+- App version: `1.0.1`
 - Artifact path: `C:\suliang\toAI\ai-chat`
 - OS/profile: `Windows 10 19045 / admin`
 - Old install state: `2026-05-23 static and packaging evidence already recorded`
@@ -22,8 +22,8 @@ This evidence lane preserves the completed 2026-05-20 internal RC baseline, the 
 
 ## Record 2
 
-- App version: `1.0.0`
-- Artifact path: `C:\suliang\toAI\ai-chat\dist\win-unpacked\AI Chat.exe`, `C:\suliang\toAI\ai-chat\dist\AI Chat Setup 1.0.0.exe`, `C:\suliang\toAI\ai-chat\dist\AI Chat Setup 1.0.0.exe.blockmap`
+- App version: `1.0.1`
+- Artifact path: `C:\suliang\toAI\ai-chat\dist\win-unpacked\AI Chat.exe`, `C:\suliang\toAI\ai-chat\dist\AI Chat Setup 1.0.1.exe`, `C:\suliang\toAI\ai-chat\dist\AI Chat Setup 1.0.1.exe.blockmap`
 - OS/profile: `Windows 10 19045 / admin`
 - Old install state: `2026-05-23 packaging evidence already recorded`
 - New install state: `unpacked and installer artifacts rebuilt on 2026-05-24`
@@ -97,8 +97,8 @@ This evidence lane preserves the completed 2026-05-20 internal RC baseline, the 
 
 ## Record 7
 
-- App version: `1.0.0`
-- Artifact path: `C:\suliang\toAI\ai-chat\dist\AI Chat Setup 1.0.0.exe`
+- App version: `1.0.1`
+- Artifact path: `C:\suliang\toAI\ai-chat\dist\AI Chat Setup 1.0.1.exe`
 - OS/profile: `Windows 10 19045 / admin`
 - Old install state: `unsigned local installer`
 - New install state: `still unsigned after 2026-05-24 rebuild`
@@ -109,3 +109,18 @@ This evidence lane preserves the completed 2026-05-20 internal RC baseline, the 
 - Evidence mode: `freshly rerun`
 - Gate state: `BLOCKED`
 - Owner / prerequisite note: public distribution remains blocked until certificate ownership, timestamp server, update metadata hosting, rollback policy, and trust-policy ownership are defined
+
+## Record 8
+
+- App version: `1.0.1`
+- Artifact path: `C:\suliang\toAI\ai-chat\output\playwright\installer-upgrade-smoke-2026-05-24.json`, `C:\suliang\toAI\ai-chat\output\playwright\installer-upgrade-backup-2026-05-24.json`
+- OS/profile: `Windows 10 19045 / admin`
+- Old install state: `real packaged 1.0.0 installer from C:\suliang\ai-chat-old\ai-chat\dist\AI Chat Setup 1.0.0.exe with seeded conversation, provider preset, and draft state`
+- New install state: `silent upgrade to 1.0.1 completed and current installed app migrated legacy localhost-origin data into the stable packaged origin`
+- Command used: `node scripts/installer-upgrade-smoke.mjs`
+- Smoke result: real `1.0.0 -> 1.0.1` installer upgrade preserved the seeded conversation, active provider preset, and draft; legacy origin `http://127.0.0.1:58160` was detected and migrated; About reported `Version: 1.0.1`; backup export completed at `2026-05-24T12:20:08.297Z`; restore verification passed and the original userData directory was restored after the run
+- Sanitized log path: `n/a`
+- Backup file path: `C:\suliang\toAI\ai-chat\output\playwright\installer-upgrade-backup-2026-05-24.json`
+- Evidence mode: `freshly rerun`
+- Gate state: `INSTALLER UPGRADE PASS`
+- Owner / prerequisite note: this closes the remaining repo-local release-confidence gap for a real installer-version upgrade path; public distribution remains separately blocked by Record 7

@@ -7,7 +7,8 @@ const os = require('os');
 const path = require('path');
 
 let mainWindow;
-let nextServer;
+let nextHandlerPromise;
+const nextServers = new Map();
 let lastStartupDiagnostic = null;
 
 const FALLBACK_BOUNDS = {
@@ -17,6 +18,16 @@ const FALLBACK_BOUNDS = {
 const PRODUCTION_SERVER_HOST = '127.0.0.1';
 const PRODUCTION_SERVER_PORT_BASE = 30000;
 const PRODUCTION_SERVER_PORT_SPAN = 10000;
+const APP_OWNED_LOCAL_STORAGE_KEYS = [
+  'conversations',
+  'currentConversationId',
+  'conversationDrafts',
+  'newConversationDraft',
+  'promptTemplates',
+  'providerPresets',
+  'activeProviderPresetId',
+];
+const LEGACY_LOCAL_STORAGE_ORIGIN_PATTERN = /META:(http:\/\/127\.0\.0\.1:\d+)/g;
 
 function getStatePath() {
   return path.join(app.getPath('userData'), 'window-state.json');
@@ -24,6 +35,10 @@ function getStatePath() {
 
 function getSettingsPath() {
   return path.join(app.getPath('userData'), 'provider-settings.json');
+}
+
+function getLocalStorageMigrationPath() {
+  return path.join(app.getPath('userData'), 'local-storage-migration.json');
 }
 
 function readJson(filePath, fallback) {
@@ -39,6 +54,10 @@ function writeJson(filePath, value) {
   fs.writeFileSync(filePath, JSON.stringify(value, null, 2));
 }
 
+function readMigrationState() {
+  return readJson(getLocalStorageMigrationPath(), null);
+}
+
 function getStableProductionPort() {
   const appIdentity = app.getName().toLowerCase();
   let hash = 0;
@@ -48,6 +67,191 @@ function getStableProductionPort() {
   }
 
   return PRODUCTION_SERVER_PORT_BASE + hash;
+}
+
+function getStableProductionOrigin() {
+  return `http://${PRODUCTION_SERVER_HOST}:${getStableProductionPort()}`;
+}
+
+function getLocalStorageLevelDbPath() {
+  return path.join(app.getPath('userData'), 'Local Storage', 'leveldb');
+}
+
+function findLegacyLocalStorageOrigins() {
+  const levelDbPath = getLocalStorageLevelDbPath();
+  if (!fs.existsSync(levelDbPath)) {
+    return [];
+  }
+
+  const stableOrigin = getStableProductionOrigin();
+  const origins = new Set();
+  for (const entry of fs.readdirSync(levelDbPath, { withFileTypes: true })) {
+    if (!entry.isFile() || !/\.(?:log|ldb)$/i.test(entry.name)) continue;
+    const absolutePath = path.join(levelDbPath, entry.name);
+    let contents;
+    try {
+      contents = fs.readFileSync(absolutePath).toString('latin1');
+    } catch (error) {
+      logAppEvent('legacy-local-storage-scan-skipped-file', {
+        file: entry.name,
+        message: error instanceof Error ? error.message : String(error),
+      });
+      continue;
+    }
+    let match;
+    while ((match = LEGACY_LOCAL_STORAGE_ORIGIN_PATTERN.exec(contents))) {
+      if (match[1] && match[1] !== stableOrigin) {
+        origins.add(match[1]);
+      }
+    }
+    LEGACY_LOCAL_STORAGE_ORIGIN_PATTERN.lastIndex = 0;
+  }
+
+  return [...origins];
+}
+
+function hasAppOwnedLocalStorageData(snapshot) {
+  return APP_OWNED_LOCAL_STORAGE_KEYS.some(key => {
+    const value = snapshot?.[key];
+    if (Array.isArray(value)) return value.length > 0;
+    if (value && typeof value === 'object') return Object.keys(value).length > 0;
+    return typeof value === 'string' ? value.length > 0 : value !== null && value !== undefined;
+  });
+}
+
+async function getProductionRequestHandler() {
+  if (!nextHandlerPromise) {
+    nextHandlerPromise = (async () => {
+      const nextApp = next({ dev: false, dir: app.getAppPath() });
+      await nextApp.prepare();
+      return nextApp.getRequestHandler();
+    })();
+  }
+
+  return nextHandlerPromise;
+}
+
+async function startProductionNextServerOnPort(port) {
+  const existingServer = nextServers.get(port);
+  if (existingServer) {
+    return `http://${PRODUCTION_SERVER_HOST}:${port}`;
+  }
+
+  const handler = await getProductionRequestHandler();
+  const server = http.createServer((request, response) => handler(request, response));
+
+  await new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(port, PRODUCTION_SERVER_HOST, resolve);
+  });
+
+  nextServers.set(port, server);
+  return `http://${PRODUCTION_SERVER_HOST}:${port}`;
+}
+
+async function captureAppOwnedLocalStorage(browserWindow) {
+  return browserWindow.webContents.executeJavaScript(`
+    (() => {
+      const readJson = key => {
+        const value = window.localStorage.getItem(key);
+        return value ? JSON.parse(value) : null;
+      };
+
+      return {
+        conversations: readJson('conversations'),
+        currentConversationId: window.localStorage.getItem('currentConversationId'),
+        conversationDrafts: readJson('conversationDrafts'),
+        newConversationDraft: window.localStorage.getItem('newConversationDraft'),
+        promptTemplates: readJson('promptTemplates'),
+        providerPresets: readJson('providerPresets'),
+        activeProviderPresetId: window.localStorage.getItem('activeProviderPresetId'),
+      };
+    })();
+  `);
+}
+
+async function applyAppOwnedLocalStorage(browserWindow, snapshot) {
+  const serializedSnapshot = JSON.stringify(snapshot);
+  await browserWindow.webContents.executeJavaScript(`
+    (() => {
+      const snapshot = ${serializedSnapshot};
+      const writeJson = (key, value) => {
+        if (value === null || value === undefined) {
+          window.localStorage.removeItem(key);
+          return;
+        }
+        window.localStorage.setItem(key, JSON.stringify(value));
+      };
+
+      writeJson('conversations', snapshot.conversations);
+      if (snapshot.currentConversationId) {
+        window.localStorage.setItem('currentConversationId', snapshot.currentConversationId);
+      } else {
+        window.localStorage.removeItem('currentConversationId');
+      }
+      writeJson('conversationDrafts', snapshot.conversationDrafts || {});
+      window.localStorage.setItem('newConversationDraft', snapshot.newConversationDraft || '');
+      writeJson('promptTemplates', snapshot.promptTemplates || []);
+      writeJson('providerPresets', snapshot.providerPresets || []);
+      if (snapshot.activeProviderPresetId) {
+        window.localStorage.setItem('activeProviderPresetId', snapshot.activeProviderPresetId);
+      } else {
+        window.localStorage.removeItem('activeProviderPresetId');
+      }
+      return true;
+    })();
+  `);
+}
+
+async function readLegacyLocalStorageSnapshot(origin) {
+  const legacyUrl = await startProductionNextServerOnPort(Number(new URL(origin).port));
+  const migrationWindow = new BrowserWindow({
+    show: false,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, 'preload.js'),
+    },
+  });
+
+  try {
+    await migrationWindow.loadURL(legacyUrl);
+    return await captureAppOwnedLocalStorage(migrationWindow);
+  } finally {
+    if (!migrationWindow.isDestroyed()) {
+      migrationWindow.destroy();
+    }
+  }
+}
+
+async function findLegacyMigrationCandidate() {
+  const migrationState = readMigrationState();
+  if (migrationState?.completedAt) {
+    return null;
+  }
+
+  for (const origin of findLegacyLocalStorageOrigins()) {
+    try {
+      const snapshot = await readLegacyLocalStorageSnapshot(origin);
+      if (hasAppOwnedLocalStorageData(snapshot)) {
+        return { origin, snapshot };
+      }
+    } catch (error) {
+      logAppEvent('legacy-local-storage-read-failed', {
+        origin,
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  return null;
+}
+
+async function reloadWindowAndWait(browserWindow) {
+  await new Promise(resolve => {
+    browserWindow.webContents.once('did-finish-load', resolve);
+    browserWindow.webContents.reloadIgnoringCache();
+  });
 }
 
 function readWindowBounds() {
@@ -153,32 +357,9 @@ function registerIpc() {
 }
 
 async function startProductionNextServer() {
-  if (nextServer) return nextServer.url;
-
-  const nextApp = next({ dev: false, dir: app.getAppPath() });
-  await nextApp.prepare();
-
-  const handler = nextApp.getRequestHandler();
-  const server = http.createServer((request, response) => handler(request, response));
-  const port = getStableProductionPort();
-
-  await new Promise((resolve, reject) => {
-    server.once('error', reject);
-    // Keep a stable packaged origin so Chromium localStorage persists across relaunches.
-    server.listen(port, PRODUCTION_SERVER_HOST, resolve);
-  });
-
-  const address = server.address();
-  if (!address || typeof address === 'string') {
-    throw new Error('Unable to determine embedded Next server port');
-  }
-
-  nextServer = {
-    server,
-    url: `http://${PRODUCTION_SERVER_HOST}:${address.port}`,
-  };
-  lastStartupDiagnostic = { status: 'ok', url: nextServer.url, at: new Date().toISOString() };
-  return nextServer.url;
+  const url = await startProductionNextServerOnPort(getStableProductionPort());
+  lastStartupDiagnostic = { status: 'ok', url, at: new Date().toISOString() };
+  return url;
 }
 
 async function createWindow() {
@@ -198,10 +379,6 @@ async function createWindow() {
     show: false,
   });
 
-  mainWindow.once('ready-to-show', () => {
-    mainWindow.show();
-  });
-
   mainWindow.on('close', saveWindowBounds);
   mainWindow.on('closed', () => {
     mainWindow = null;
@@ -213,7 +390,21 @@ async function createWindow() {
       mainWindow.webContents.openDevTools();
     } else {
       await mainWindow.loadURL(await startProductionNextServer());
+      const currentSnapshot = await captureAppOwnedLocalStorage(mainWindow);
+      if (!hasAppOwnedLocalStorageData(currentSnapshot)) {
+        const legacyMigration = await findLegacyMigrationCandidate();
+        if (legacyMigration?.snapshot) {
+          await applyAppOwnedLocalStorage(mainWindow, legacyMigration.snapshot);
+          writeJson(getLocalStorageMigrationPath(), {
+            migratedFromOrigin: legacyMigration.origin,
+            completedAt: new Date().toISOString(),
+            migratedKeys: APP_OWNED_LOCAL_STORAGE_KEYS,
+          });
+          await reloadWindowAndWait(mainWindow);
+        }
+      }
     }
+    mainWindow.show();
   } catch (error) {
     lastStartupDiagnostic = {
       status: 'failed',
@@ -243,8 +434,8 @@ app.on('activate', () => {
 });
 
 app.on('before-quit', () => {
-  if (nextServer) {
-    nextServer.server.close();
-    nextServer = null;
+  for (const server of nextServers.values()) {
+    server.close();
   }
+  nextServers.clear();
 });

@@ -4,23 +4,21 @@ This file tracks the currently approved execution lane. Update it when the team 
 
 ## Current Execution Lane
 
-Real installer-version upgrade evidence after the 2026-05-24 packaged relaunch retention fix.
+Batch 2: verification stack upgrade after closing the real installer-version upgrade lane on 2026-05-24.
 
 ## Target Result
 
-- Preserve the completed 2026-05-23 roadmap Phase 1-6 batch as completed work, not backlog.
-- Keep the 2026-05-24 static, packaging, unpacked smoke, installed startup smoke, historical compatibility, and packaged relaunch retention evidence traceable.
-- Prove at least one real old-installed-build -> current-installed-build upgrade path before claiming full upgrade retention coverage.
+- Preserve the completed Batch 1 installer-upgrade evidence and keep it traceable in release docs.
+- Replace the current partly-manual release confidence model with a documented browser and packaged-app smoke contract.
 - Keep public distribution explicitly blocked until signing and update prerequisites exist.
 
 ## Work Items
 
-1. Preserve `docs/RELEASE_RC_EVIDENCE_2026-05-20.md` as the baseline same-version install/reinstall evidence.
-2. Preserve `docs/RELEASE_RC_EVIDENCE_2026-05-23.md` as the active dated record for the 2026-05-24 rerun, retention fix, and remaining release gaps.
-3. Treat `output/playwright/verification-commands-2026-05-24.txt`, `output/playwright/packaged-smoke-summary-2026-05-24.json`, `output/playwright/packaged-smoke-unpacked-startup-2026-05-24.json`, `output/playwright/packaged-smoke-installed-startup-2026-05-24.json`, `output/playwright/cross-version-compatibility-2026-05-24.json`, and `output/playwright/packaged-retention-fixed-2026-05-24.json` as operator evidence artifacts for this lane.
-4. Run one real installer-version upgrade path and capture session retention, provider preset/configuration retention, backup export at the boundary, and restore into the current version.
-5. Update `docs/PENDING_RELEASE_HANDOFF_2026-05-24.md` and related release notes after the upgrade lane changes state.
-6. Do not open a public-distribution lane until signing, update metadata hosting, rollback policy, and trust-policy ownership exist.
+1. Preserve `output/playwright/installer-upgrade-smoke-2026-05-24.json` and `output/playwright/installer-upgrade-backup-2026-05-24.json` as the dated Batch 1 proof for `1.0.0 -> 1.0.1`.
+2. Decide the Batch 2 smoke contract surface for browser flow coverage and packaged/Electron startup coverage.
+3. Update `scripts/verify-upgrade.mjs` and related test entrypoints so the new smoke lane becomes part of the repo contract instead of operator memory.
+4. Document the new verification command sequence in release and planning docs.
+5. Keep public distribution blocked until certificate ownership, timestamping, update metadata hosting, rollback policy, and trust-policy ownership exist.
 
 ## Required Verification
 
@@ -33,22 +31,21 @@ pnpm electron-build
 pnpm electron-installer
 ```
 
-- Preserve the current packaged relaunch retention evidence by keeping `output/playwright/packaged-retention-fixed-2026-05-24.json` traceable.
-- For the current lane, add one real installer-upgrade artifact that distinguishes real version-upgrade behavior from equivalent historical-data compatibility.
+- Batch 1 evidence is already complete in `output/playwright/installer-upgrade-smoke-2026-05-24.json`.
+- Batch 2 should add stable rerunnable smoke commands rather than another one-off operator flow.
 
 ## Manual Smoke
 
-1. Install the older packaged build, confirm session and provider state exist, then upgrade to the current installer.
-2. Confirm the upgraded installed app still opens prior sessions and provider configuration.
-3. Export a backup from the upgrade boundary when possible and restore it into the current version.
-4. Record each item as `already evidenced`, `freshly rerun`, `deferred`, or `blocked`, with artifact path and owner/prerequisite notes.
+1. Preserve the completed installer-upgrade artifact set as baseline evidence, not open work.
+2. Add one browser smoke lane that covers key workspace flows under the current app shell.
+3. Add one packaged/Electron smoke lane that covers startup, About, diagnostics, and backup actions.
+4. Record each Batch 2 addition as `freshly rerun`, `deferred`, or `blocked`, with artifact path and owner/prerequisite notes.
 
 ## Stop Condition
 
 Stop only when:
 
-- the completed 2026-05-23 roadmap batch remains documented without contradictory backlog language,
-- 2026-05-24 verification and smoke evidence remain traceable to dated records and local artifacts,
-- packaged relaunch retention remains recorded as fixed with fresh evidence,
-- at least one real installer-version upgrade path is either evidenced with dated artifacts or explicitly carried as the active unresolved gap,
-- public distribution gates remain blocked or deferred with owner notes.
+- Batch 1 installer-version upgrade evidence remains traceable and uncontested,
+- Batch 2 verification commands are documented in source control and can be rerun without reconstructing operator steps,
+- release docs reflect the new verification contract and no longer describe installer-version upgrade evidence as missing,
+- public distribution gates remain explicitly blocked or assigned with owners.

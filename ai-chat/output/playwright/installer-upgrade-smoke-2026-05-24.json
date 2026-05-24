@@ -1,0 +1,279 @@
+{
+  "ranAt": "2026-05-24T12:19:30.157Z",
+  "oldInstaller": "C:/suliang/ai-chat-old/ai-chat/dist/AI Chat Setup 1.0.0.exe",
+  "newInstaller": "C:/suliang/toAI/ai-chat/dist/AI Chat Setup 1.0.1.exe",
+  "outputPath": "C:/suliang/toAI/ai-chat/output/playwright/installer-upgrade-smoke-2026-05-24.json",
+  "backupJsonPath": "C:/suliang/toAI/ai-chat/output/playwright/installer-upgrade-backup-2026-05-24.json",
+  "userDataBackupPath": "C:/Users/admin/AppData/Roaming/ai-chat.batch1-backup-1779625170158",
+  "originalInstallPresent": true,
+  "originalUserDataPresent": true,
+  "uninstalledExistingApp": true,
+  "oldVersionSeeded": {
+    "title": "Legacy upgrade seed conversation",
+    "providerLine": "Provider: Legacy Upgrade Provider",
+    "versionLine": null,
+    "storage": {
+      "conversations": [
+        {
+          "id": "upgrade-conversation-1",
+          "title": "Legacy upgrade seed conversation",
+          "messages": [
+            {
+              "id": "upgrade-user-1",
+              "role": "user",
+              "content": "Upgrade me safely",
+              "timestamp": 1779625161157,
+              "status": "complete"
+            },
+            {
+              "id": "upgrade-assistant-1",
+              "role": "assistant",
+              "content": "Upgrade path seeded",
+              "timestamp": 1779625162157,
+              "status": "complete"
+            }
+          ],
+          "createdAt": 1779625160157,
+          "updatedAt": 1779625188212,
+          "provider": {
+            "id": "upgrade-provider-1",
+            "name": "Legacy Upgrade Provider",
+            "baseUrl": "https://api.openai.com/v1",
+            "model": "gpt-4.1-mini",
+            "capabilities": {
+              "supportsAttachments": true,
+              "supportsImages": true,
+              "maxImageAttachmentBytes": 5242880,
+              "maxTextFileBytes": 262144,
+              "streaming": true
+            },
+            "checkedAt": 1779625150157,
+            "status": "reachable"
+          }
+        }
+      ],
+      "currentConversationId": "upgrade-conversation-1",
+      "conversationDrafts": {
+        "upgrade-conversation-1": "draft preserved across upgrade"
+      },
+      "promptTemplates": [
+        {
+          "id": "template-upgrade-1",
+          "title": "Upgrade template",
+          "content": "Stay stable during installer upgrade",
+          "createdAt": 1779625163157,
+          "updatedAt": 1779625163157
+        }
+      ],
+      "providerPresets": [
+        {
+          "id": "upgrade-provider-1",
+          "name": "Legacy Upgrade Provider",
+          "baseUrl": "https://api.openai.com/v1",
+          "model": "gpt-4.1-mini",
+          "supportsAttachments": true,
+          "capabilities": {
+            "supportsAttachments": true,
+            "supportsImages": true,
+            "maxImageAttachmentBytes": 5242880,
+            "maxTextFileBytes": 262144,
+            "streaming": true
+          },
+          "createdAt": 1779625164157,
+          "updatedAt": 1779625164157,
+          "lastCheckedAt": 1779625165157,
+          "lastCheckStatus": "reachable"
+        }
+      ],
+      "activeProviderPresetId": "upgrade-provider-1"
+    }
+  },
+  "legacyStorageArtifacts": {
+    "origins": [
+      "http://127.0.0.1:58160"
+    ],
+    "flushed": true
+  },
+  "postUpgradeState": {
+    "title": "Legacy upgrade seed conversation",
+    "providerLine": "Provider: Legacy Upgrade Provider | reachable",
+    "versionLine": null,
+    "storage": {
+      "conversations": [
+        {
+          "id": "upgrade-conversation-1",
+          "title": "Legacy upgrade seed conversation",
+          "messages": [
+            {
+              "id": "upgrade-user-1",
+              "role": "user",
+              "content": "Upgrade me safely",
+              "timestamp": 1779625161157,
+              "status": "complete"
+            },
+            {
+              "id": "upgrade-assistant-1",
+              "role": "assistant",
+              "content": "Upgrade path seeded",
+              "timestamp": 1779625162157,
+              "status": "complete"
+            }
+          ],
+          "createdAt": 1779625160157,
+          "updatedAt": 1779625207715,
+          "provider": {
+            "id": "upgrade-provider-1",
+            "name": "Legacy Upgrade Provider",
+            "baseUrl": "https://api.openai.com/v1",
+            "model": "gpt-4.1-mini",
+            "capabilities": {
+              "supportsAttachments": true,
+              "supportsImages": true,
+              "maxImageAttachmentBytes": 5242880,
+              "maxTextFileBytes": 262144,
+              "streaming": true
+            },
+            "checkedAt": 1779625150157,
+            "status": "reachable"
+          }
+        }
+      ],
+      "currentConversationId": "upgrade-conversation-1",
+      "conversationDrafts": {
+        "upgrade-conversation-1": "draft preserved across upgrade"
+      },
+      "promptTemplates": [
+        {
+          "id": "template-upgrade-1",
+          "title": "Upgrade template",
+          "content": "Stay stable during installer upgrade",
+          "createdAt": 1779625163157,
+          "updatedAt": 1779625163157
+        }
+      ],
+      "providerPresets": [
+        {
+          "id": "upgrade-provider-1",
+          "name": "Legacy Upgrade Provider",
+          "baseUrl": "https://api.openai.com/v1",
+          "model": "gpt-4.1-mini",
+          "supportsAttachments": true,
+          "capabilities": {
+            "supportsAttachments": true,
+            "supportsImages": true,
+            "maxImageAttachmentBytes": 5242880,
+            "maxTextFileBytes": 262144,
+            "streaming": true
+          },
+          "createdAt": 1779625164157,
+          "updatedAt": 1779625164157,
+          "lastCheckedAt": 1779625165157,
+          "lastCheckStatus": "reachable"
+        }
+      ],
+      "activeProviderPresetId": "upgrade-provider-1"
+    }
+  },
+  "postUpgradeMigrationState": {
+    "migratedFromOrigin": "http://127.0.0.1:58160",
+    "completedAt": "2026-05-24T12:20:07.587Z",
+    "migratedKeys": [
+      "conversations",
+      "currentConversationId",
+      "conversationDrafts",
+      "newConversationDraft",
+      "promptTemplates",
+      "providerPresets",
+      "activeProviderPresetId"
+    ]
+  },
+  "postUpgradeTargetUrl": "ws://127.0.0.1:9441/devtools/page/74E3D1D7CDA923E98120EAFDB4FF561F",
+  "postUpgradeTargets": null,
+  "backupExportStatus": "Exported backup created at 2026-05-24T12:20:08.297Z.",
+  "restoreVerified": true,
+  "restoredOriginalUserData": true,
+  "postRestoreState": {
+    "title": null,
+    "providerLine": null,
+    "versionLine": null,
+    "storage": {
+      "conversations": [
+        {
+          "id": "upgrade-conversation-1",
+          "title": "Legacy upgrade seed conversation",
+          "messages": [
+            {
+              "id": "upgrade-user-1",
+              "role": "user",
+              "content": "Upgrade me safely",
+              "timestamp": 1779625161157,
+              "status": "complete"
+            },
+            {
+              "id": "upgrade-assistant-1",
+              "role": "assistant",
+              "content": "Upgrade path seeded",
+              "timestamp": 1779625162157,
+              "status": "complete"
+            }
+          ],
+          "createdAt": 1779625160157,
+          "updatedAt": 1779625207715,
+          "pinned": false,
+          "archived": false,
+          "provider": {
+            "id": "upgrade-provider-1",
+            "name": "Legacy Upgrade Provider",
+            "baseUrl": "https://api.openai.com/v1",
+            "model": "gpt-4.1-mini",
+            "capabilities": {
+              "supportsAttachments": true,
+              "supportsImages": true,
+              "maxImageAttachmentBytes": 5242880,
+              "maxTextFileBytes": 262144,
+              "streaming": true
+            },
+            "checkedAt": 1779625150157,
+            "status": "reachable"
+          }
+        }
+      ],
+      "currentConversationId": "upgrade-conversation-1",
+      "conversationDrafts": {
+        "upgrade-conversation-1": "draft preserved across upgrade"
+      },
+      "promptTemplates": [
+        {
+          "id": "template-upgrade-1",
+          "title": "Upgrade template",
+          "content": "Stay stable during installer upgrade",
+          "createdAt": 1779625163157,
+          "updatedAt": 1779625163157,
+          "version": 2
+        }
+      ],
+      "providerPresets": [
+        {
+          "baseUrl": "https://api.openai.com/v1",
+          "model": "gpt-4.1-mini",
+          "supportsAttachments": true,
+          "capabilities": {
+            "supportsAttachments": true,
+            "supportsImages": true,
+            "maxImageAttachmentBytes": 5242880,
+            "maxTextFileBytes": 262144,
+            "streaming": true
+          },
+          "id": "upgrade-provider-1",
+          "name": "Legacy Upgrade Provider",
+          "createdAt": 1779625164157,
+          "updatedAt": 1779625164157,
+          "lastCheckedAt": 1779625165157,
+          "lastCheckStatus": "reachable",
+          "version": 2
+        }
+      ],
+      "activeProviderPresetId": "upgrade-provider-1"
+    }
+  }
+}

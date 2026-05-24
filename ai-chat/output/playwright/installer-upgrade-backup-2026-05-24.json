@@ -1,0 +1,82 @@
+{
+  "backupFormatVersion": 1,
+  "storageSchemaVersion": 2,
+  "createdAt": "2026-05-24T12:20:08.297Z",
+  "localStorage": {
+    "conversations": [
+      {
+        "id": "upgrade-conversation-1",
+        "title": "Legacy upgrade seed conversation",
+        "messages": [
+          {
+            "id": "upgrade-user-1",
+            "role": "user",
+            "content": "Upgrade me safely",
+            "timestamp": 1779625161157,
+            "status": "complete"
+          },
+          {
+            "id": "upgrade-assistant-1",
+            "role": "assistant",
+            "content": "Upgrade path seeded",
+            "timestamp": 1779625162157,
+            "status": "complete"
+          }
+        ],
+        "createdAt": 1779625160157,
+        "updatedAt": 1779625207715,
+        "provider": {
+          "id": "upgrade-provider-1",
+          "name": "Legacy Upgrade Provider",
+          "baseUrl": "https://api.openai.com/v1",
+          "model": "gpt-4.1-mini",
+          "capabilities": {
+            "supportsAttachments": true,
+            "supportsImages": true,
+            "maxImageAttachmentBytes": 5242880,
+            "maxTextFileBytes": 262144,
+            "streaming": true
+          },
+          "checkedAt": 1779625150157,
+          "status": "reachable"
+        }
+      }
+    ],
+    "activeConversationId": "upgrade-conversation-1",
+    "conversationDrafts": {
+      "upgrade-conversation-1": "draft preserved across upgrade"
+    },
+    "newConversationDraft": "",
+    "promptTemplates": [
+      {
+        "id": "template-upgrade-1",
+        "title": "Upgrade template",
+        "content": "Stay stable during installer upgrade",
+        "createdAt": 1779625163157,
+        "updatedAt": 1779625163157
+      }
+    ],
+    "providerPresets": [
+      {
+        "id": "upgrade-provider-1",
+        "name": "Legacy Upgrade Provider",
+        "baseUrl": "https://api.openai.com/v1",
+        "model": "gpt-4.1-mini",
+        "supportsAttachments": true,
+        "capabilities": {
+          "supportsAttachments": true,
+          "supportsImages": true,
+          "maxImageAttachmentBytes": 5242880,
+          "maxTextFileBytes": 262144,
+          "streaming": true
+        },
+        "createdAt": 1779625164157,
+        "updatedAt": 1779625164157,
+        "lastCheckedAt": 1779625165157,
+        "lastCheckStatus": "reachable"
+      }
+    ],
+    "activeProviderPresetId": "upgrade-provider-1",
+    "legacyProviderSettings": null
+  }
+}
