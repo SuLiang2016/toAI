@@ -4,20 +4,23 @@ This file tracks the currently approved execution lane. Update it when the team 
 
 ## Current Execution Lane
 
-No active implementation lane. The roadmap Phase 1-6 batch closed on 2026-05-23.
+Real installer-version upgrade evidence after the 2026-05-24 packaged relaunch retention fix.
 
 ## Target Result
 
-- Preserve the completed 2026-05-23 execution evidence for roadmap phases 1-6.
+- Preserve the completed 2026-05-23 roadmap Phase 1-6 batch as completed work, not backlog.
+- Keep the 2026-05-24 static, packaging, unpacked smoke, installed startup smoke, historical compatibility, and packaged relaunch retention evidence traceable.
+- Prove at least one real old-installed-build -> current-installed-build upgrade path before claiming full upgrade retention coverage.
 - Keep public distribution explicitly blocked until signing and update prerequisites exist.
-- Start a new lane only after choosing between cross-version installer upgrade evidence, fresh interactive packaged smoke, or a new product direction.
 
 ## Work Items
 
-1. Preserve `docs/RELEASE_RC_EVIDENCE_2026-05-20.md` as already-recorded baseline evidence.
-2. Preserve `docs/RELEASE_RC_EVIDENCE_2026-05-23.md` as the 2026-05-23 delta-closure record.
-3. Keep `docs/NEXT_UPGRADE_ROADMAP.md` and `.omx/plans/roadmap-ai-chat-next-stage-product-2026-05-23.md` aligned with the completed batch.
-4. Do not open a public-distribution lane until signing, update metadata hosting, rollback policy, and trust-policy ownership exist.
+1. Preserve `docs/RELEASE_RC_EVIDENCE_2026-05-20.md` as the baseline same-version install/reinstall evidence.
+2. Preserve `docs/RELEASE_RC_EVIDENCE_2026-05-23.md` as the active dated record for the 2026-05-24 rerun, retention fix, and remaining release gaps.
+3. Treat `output/playwright/verification-commands-2026-05-24.txt`, `output/playwright/packaged-smoke-summary-2026-05-24.json`, `output/playwright/packaged-smoke-unpacked-startup-2026-05-24.json`, `output/playwright/packaged-smoke-installed-startup-2026-05-24.json`, `output/playwright/cross-version-compatibility-2026-05-24.json`, and `output/playwright/packaged-retention-fixed-2026-05-24.json` as operator evidence artifacts for this lane.
+4. Run one real installer-version upgrade path and capture session retention, provider preset/configuration retention, backup export at the boundary, and restore into the current version.
+5. Update `docs/PENDING_RELEASE_HANDOFF_2026-05-24.md` and related release notes after the upgrade lane changes state.
+6. Do not open a public-distribution lane until signing, update metadata hosting, rollback policy, and trust-policy ownership exist.
 
 ## Required Verification
 
@@ -30,20 +33,22 @@ pnpm electron-build
 pnpm electron-installer
 ```
 
-- Run `pnpm electron-dev` or packaged interactive smoke only when a future lane changes runtime-only Electron behavior or explicitly refreshes packaged UI evidence.
+- Preserve the current packaged relaunch retention evidence by keeping `output/playwright/packaged-retention-fixed-2026-05-24.json` traceable.
+- For the current lane, add one real installer-upgrade artifact that distinguishes real version-upgrade behavior from equivalent historical-data compatibility.
 
 ## Manual Smoke
 
-1. If refreshing packaged UI evidence, launch the packaged desktop app.
-2. Confirm startup diagnostics, About, backup export/restore, and sanitized log actions.
-3. Capture whether each step is `already evidenced`, `freshly rerun`, or `deferred`.
+1. Install the older packaged build, confirm session and provider state exist, then upgrade to the current installer.
+2. Confirm the upgraded installed app still opens prior sessions and provider configuration.
+3. Export a backup from the upgrade boundary when possible and restore it into the current version.
+4. Record each item as `already evidenced`, `freshly rerun`, `deferred`, or `blocked`, with artifact path and owner/prerequisite notes.
 
 ## Stop Condition
 
 Stop only when:
 
-- the completed batch remains documented without contradictory backlog language,
-- verification commands and packaged-artifact evidence stay traceable to a dated record,
-- known gaps remain recorded as gaps rather than implied passes,
-- public distribution gates remain blocked or deferred with owner notes,
-- docs reflect the completed 2026-05-23 roadmap batch rather than the older in-flight release lane.
+- the completed 2026-05-23 roadmap batch remains documented without contradictory backlog language,
+- 2026-05-24 verification and smoke evidence remain traceable to dated records and local artifacts,
+- packaged relaunch retention remains recorded as fixed with fresh evidence,
+- at least one real installer-version upgrade path is either evidenced with dated artifacts or explicitly carried as the active unresolved gap,
+- public distribution gates remain blocked or deferred with owner notes.

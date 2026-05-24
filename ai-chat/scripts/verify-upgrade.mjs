@@ -227,6 +227,17 @@ assert.match(electronMain, /logs:export/, 'Electron must expose sanitized log ex
 assert.match(electronMain, /logs:open/, 'Electron must expose sanitized log open IPC');
 assert.match(electronMain, /sanitizeLogText/, 'Electron logs must be sanitized');
 assert.match(electronMain, /startProductionNextServer/, 'Electron production must load the built Next app');
+assert.match(electronMain, /getStableProductionPort/, 'Electron production must derive a stable packaged localhost port');
+assert.match(
+  electronMain,
+  /server\.listen\(port,\s*PRODUCTION_SERVER_HOST,\s*resolve\)/,
+  'Electron production must bind the embedded server to a stable packaged localhost origin'
+);
+assert.doesNotMatch(
+  electronMain,
+  /server\.listen\(0,\s*['"]127\.0\.0\.1['"]/,
+  'Electron production must not use an ephemeral packaged localhost port'
+);
 assert.match(electronMain, /lastStartupDiagnostic/, 'Electron must record embedded startup diagnostics');
 assert.match(electronMain, /isLegacyDefaultSettings/, 'Electron settings must ignore legacy default provider config');
 

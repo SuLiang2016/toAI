@@ -14,6 +14,9 @@ const FALLBACK_BOUNDS = {
   width: 1200,
   height: 800,
 };
+const PRODUCTION_SERVER_HOST = '127.0.0.1';
+const PRODUCTION_SERVER_PORT_BASE = 30000;
+const PRODUCTION_SERVER_PORT_SPAN = 10000;
 
 function getStatePath() {
   return path.join(app.getPath('userData'), 'window-state.json');
@@ -34,6 +37,17 @@ function readJson(filePath, fallback) {
 function writeJson(filePath, value) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(filePath, JSON.stringify(value, null, 2));
+}
+
+function getStableProductionPort() {
+  const appIdentity = app.getName().toLowerCase();
+  let hash = 0;
+
+  for (const char of appIdentity) {
+    hash = (hash * 31 + char.charCodeAt(0)) % PRODUCTION_SERVER_PORT_SPAN;
+  }
+
+  return PRODUCTION_SERVER_PORT_BASE + hash;
 }
 
 function readWindowBounds() {
@@ -146,10 +160,12 @@ async function startProductionNextServer() {
 
   const handler = nextApp.getRequestHandler();
   const server = http.createServer((request, response) => handler(request, response));
+  const port = getStableProductionPort();
 
   await new Promise((resolve, reject) => {
     server.once('error', reject);
-    server.listen(0, '127.0.0.1', resolve);
+    // Keep a stable packaged origin so Chromium localStorage persists across relaunches.
+    server.listen(port, PRODUCTION_SERVER_HOST, resolve);
   });
 
   const address = server.address();
@@ -159,7 +175,7 @@ async function startProductionNextServer() {
 
   nextServer = {
     server,
-    url: `http://127.0.0.1:${address.port}`,
+    url: `http://${PRODUCTION_SERVER_HOST}:${address.port}`,
   };
   lastStartupDiagnostic = { status: 'ok', url: nextServer.url, at: new Date().toISOString() };
   return nextServer.url;

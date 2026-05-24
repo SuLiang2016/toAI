@@ -1,0 +1,35 @@
+{
+  "date": "2026-05-24",
+  "unpacked": {
+    "label": "unpacked",
+    "exePath": "C:\\suliang\\toAI\\ai-chat\\dist\\win-unpacked\\AI Chat.exe",
+    "firstLaunch": {
+      "href": "http://127.0.0.1:38733/",
+      "origin": "http://127.0.0.1:38733",
+      "stored": "unpacked-1779602563375"
+    },
+    "secondLaunch": {
+      "href": "http://127.0.0.1:38733/",
+      "origin": "http://127.0.0.1:38733",
+      "stored": "unpacked-1779602563375"
+    },
+    "originStable": true,
+    "retainedAcrossRelaunch": true
+  },
+  "installed": {
+    "label": "installed",
+    "exePath": "C:\\Users\\admin\\AppData\\Local\\Programs\\ai-chat\\AI Chat.exe",
+    "firstLaunch": {
+      "href": "http://127.0.0.1:38733/",
+      "origin": "http://127.0.0.1:38733",
+      "stored": "installed-1779602570832"
+    },
+    "secondLaunch": {
+      "href": "http://127.0.0.1:38733/",
+      "origin": "http://127.0.0.1:38733",
+      "stored": "installed-1779602570832"
+    },
+    "originStable": true,
+    "retainedAcrossRelaunch": true
+  }
+}
