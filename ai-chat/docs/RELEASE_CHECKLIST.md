@@ -51,9 +51,10 @@ Record each run with the release evidence template in `docs/RELEASE_EVIDENCE_TEM
 ## Signing
 
 - Windows code signing is not configured in this repo.
+- Current signing ownership contact in `docs/PUBLIC_DISTRIBUTION_OWNERSHIP.md`: `1014576698@qq.com`.
 - Keep `signAndEditExecutable: false` until a certificate, timestamp server, and signing secret storage are selected.
 - Do not ship a public installer from an unsigned build without explicitly documenting the user trust impact.
-- Public distribution is `BLOCKED` until signing ownership, secret storage, and timestamping exist.
+- Public distribution is `BLOCKED` until the concrete certificate input, secret storage path/service, and timestamp authorities exist.
 
 ## Update Channel
 
@@ -61,6 +62,7 @@ Record each run with the release evidence template in `docs/RELEASE_EVIDENCE_TEM
 - Before enabling updates, define stable, beta, and rollback channels.
 - Record where release metadata is hosted and how failed rollouts are disabled.
 - Use `docs/PUBLIC_DISTRIBUTION_OWNERSHIP.md` as the source-controlled owner and metadata-hosting contract.
+- Current host contract points to `GitHub Releases` at `https://github.com/SuLiang2016/toAI/releases` with a provisional `beta` namespace owner of `1014576698@qq.com`.
 - Public update rollout is `DEFERRED` until channels and rollback metadata exist.
 
 ## Rollback
@@ -68,7 +70,8 @@ Record each run with the release evidence template in `docs/RELEASE_EVIDENCE_TEM
 - Keep the previous known-good installer or unpacked artifact.
 - Document the app data compatibility expectations before changing local storage schemas.
 - Storage migrations must tolerate older records and quarantine malformed local records.
-- Rollback readiness is `BLOCKED` until metadata hosting and trust policy are defined.
+- Rollback ownership and incident communication are assigned to `1014576698@qq.com`.
+- Rollback readiness is `BLOCKED` until the metadata publication path and previous-known-good channel contract are fully defined.
 
 ## Installer Behavior
 

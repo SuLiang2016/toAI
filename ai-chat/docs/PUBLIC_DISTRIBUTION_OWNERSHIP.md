@@ -1,9 +1,9 @@
 # AI Chat Public Distribution Ownership
 
-Date: 2026-05-24
+Date: 2026-05-25
 Status: internal-only release remains blocked
 
-This file is the repo-local contract for the external prerequisites that still block public distribution. It does not approve release by itself. It records what must be owned, what is still `TBD`, and what repo-local evidence already exists.
+This file is the repo-local contract for the external prerequisites that still block public distribution. It does not approve release by itself. It records what is now owned, what infrastructure is still `TBD`, and what repo-local evidence already exists.
 
 ## Current Boundary
 
@@ -15,17 +15,17 @@ Repo-local verification is complete for the current `1.0.1` internal RC lane:
 - packaged desktop smoke passed,
 - real `1.0.0 -> 1.0.1` installer upgrade evidence exists.
 
-Public distribution is still blocked because the external ownership and infrastructure below are not fully assigned.
+Public distribution is still blocked because the external ownership is now recorded, but the timestamping and release-infrastructure details below are not fully defined.
 
 ## Blocking Matrix
 
 | Item | Status | Owner | Notes |
 | --- | --- | --- | --- |
-| Signing certificate ownership | `BLOCKED` | `TBD` | Needs certificate owner, secret storage owner, and signing workflow owner. |
-| Timestamp server | `BLOCKED` | `TBD` | Needs selected timestamp authority plus operational fallback. |
-| Update metadata hosting | `BLOCKED` | `TBD` | Needs a public or controlled host for channel metadata and downloadable artifacts. |
-| Rollback policy | `BLOCKED` | `TBD` | Needs authority for rollback decisions, retention, and emergency disable flow. |
-| Trust-policy owner | `BLOCKED` | `TBD` | Needs explicit owner for user-facing trust posture and unsigned/internal-only boundaries. |
+| Signing certificate ownership | `OWNED` | `1014576698@qq.com` | Owner roles are assigned; certificate material, storage path/service, and signing enablement are still separate release gates. |
+| Timestamp server | `BLOCKED` | `1014576698@qq.com` | Operational ownership is assigned, but primary and fallback timestamp authorities are still `TBD`. |
+| Update metadata hosting | `BLOCKED` | `1014576698@qq.com` | GitHub Releases beta host and base URL are assigned; stable/rollback model and metadata publication details are still incomplete. |
+| Rollback policy | `OWNED` | `1014576698@qq.com` | Rollback authority, retention ownership, and incident communication ownership are assigned. |
+| Trust-policy owner | `OWNED` | `1014576698@qq.com` | Trust posture, internal-only approval, release-notes, and installer-communication ownership are assigned. |
 
 ## Item 1: Signing Certificate Ownership
 
@@ -35,11 +35,17 @@ Assign the owner and storage path for Windows signing so public installers are n
 
 ### Required Owner Fields
 
-- Certificate owner: `TBD`
-- Signing secret storage owner: `TBD`
-- Signing workflow owner: `TBD`
-- Certificate renewal owner: `TBD`
-- Revocation contact: `TBD`
+- Certificate owner: `1014576698@qq.com`
+- Signing secret storage owner: `1014576698@qq.com`
+- Signing workflow owner: `1014576698@qq.com`
+- Certificate renewal owner: `1014576698@qq.com`
+- Revocation contact: `1014576698@qq.com`
+
+### Remaining Non-Owner Prerequisites
+
+- Selected signing certificate or procurement source: `TBD`
+- Signing secret storage path/service: `TBD`
+- `signAndEditExecutable`: still `false` until certificate and timestamp inputs are configured
 
 ### Done Criteria
 
@@ -60,8 +66,8 @@ Select the timestamp authority and fallback policy used during signing so signat
 
 - Primary timestamp authority: `TBD`
 - Fallback timestamp authority: `TBD`
-- Operational owner: `TBD`
-- Failure escalation owner: `TBD`
+- Operational owner: `1014576698@qq.com`
+- Failure escalation owner: `1014576698@qq.com`
 
 ### Done Criteria
 
@@ -108,13 +114,21 @@ Before public rollout, the metadata host decision must define all of the followi
 
 Record these values before changing release state from internal-only:
 
-- Metadata host owner: `TBD`
-- Infrastructure/service: `TBD`
-- Base URL: `TBD`
-- Channel namespace: `TBD`
-- Publish operator or automation owner: `TBD`
-- Artifact retention owner: `TBD`
-- Emergency revoke owner: `TBD`
+- Metadata host owner: `1014576698@qq.com`
+- Infrastructure/service: `GitHub Releases`
+- Base URL: `https://github.com/SuLiang2016/toAI/releases`
+- Channel namespace: `beta`
+- Publish operator or automation owner: `1014576698@qq.com`
+- Artifact retention owner: `1014576698@qq.com`
+- Emergency revoke owner: `1014576698@qq.com`
+
+### Remaining Non-Owner Prerequisites
+
+- Stable channel namespace or path: `TBD`
+- Previous-known-good / rollback channel path: `TBD`
+- Metadata publication path for the chosen updater: `TBD`
+- Access policy (internal-only, staged, or public): `TBD`
+- Promotion flow from internal RC to public channel: `TBD`
 
 ### Done Criteria
 
@@ -134,10 +148,10 @@ Define who can roll back a bad release, what artifacts must remain available, an
 
 ### Required Owner Fields
 
-- Rollback decision owner: `TBD`
-- Previous-known-good artifact retention owner: `TBD`
-- Metadata freeze/revert operator: `TBD`
-- Incident communication owner: `TBD`
+- Rollback decision owner: `1014576698@qq.com`
+- Previous-known-good artifact retention owner: `1014576698@qq.com`
+- Metadata freeze/revert operator: `1014576698@qq.com`
+- Incident communication owner: `1014576698@qq.com`
 
 ### Done Criteria
 
@@ -156,10 +170,10 @@ Define who owns the user-facing trust posture for internal-only versus public bu
 
 ### Required Owner Fields
 
-- Public trust-policy owner: `TBD`
-- Internal-only release approver: `TBD`
-- User-facing release-notes owner: `TBD`
-- Installer warning/communication owner: `TBD`
+- Public trust-policy owner: `1014576698@qq.com`
+- Internal-only release approver: `1014576698@qq.com`
+- User-facing release-notes owner: `1014576698@qq.com`
+- Installer warning/communication owner: `1014576698@qq.com`
 
 ### Done Criteria
 
@@ -175,7 +189,8 @@ Item 5 is complete only when:
 The repo-local public-distribution lane is complete only when:
 
 - all five blocker items have explicit non-`TBD` owners,
-- public distribution docs no longer describe signing, timestamping, metadata hosting, rollback, or trust policy as undefined,
+- the remaining non-owner release inputs for signing, timestamping, metadata publication, and rollback are documented,
+- public distribution docs no longer describe ownership for signing, timestamping, metadata hosting, rollback, or trust policy as undefined,
 - the release state can move from `internal-only` without contradicting repo docs.
 
 ## Related Docs
