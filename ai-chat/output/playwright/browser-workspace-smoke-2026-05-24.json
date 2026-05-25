@@ -1,16 +1,21 @@
 {
-  "ranAt": "2026-05-24T13:20:38.209Z",
+  "ranAt": "2026-05-25T07:22:18.327Z",
   "outputPath": "C:\\suliang\\toAI\\ai-chat\\output\\playwright\\browser-workspace-smoke-2026-05-24.json",
   "targetUrl": "http://127.0.0.1:3100",
   "browserExecutable": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
-  "profileDir": "C:\\suliang\\toAI\\ai-chat\\output\\playwright\\browser-smoke-profile-1779628838208",
+  "profileDir": "C:\\suliang\\toAI\\ai-chat\\output\\playwright\\browser-smoke-profile-1779693738326",
+  "defaultLocaleVerified": true,
   "seededTitle": "Browser smoke seed conversation",
+  "helpModalVerified": true,
+  "helpEntryVisibleAfterReload": true,
   "renamedTitle": "Browser smoke renamed",
   "searchQuery": "renamed",
   "archivedViewConfirmed": true,
   "draftPersistedAfterReload": true,
+  "englishLocalePersistedAfterReload": true,
   "finalSnapshot": {
-    "currentTitle": "New chat",
-    "newConversationDraft": "Browser smoke draft persists after reload."
+    "currentTitle": "Browser smoke renamed",
+    "newConversationDraft": "Browser smoke draft persists after reload.",
+    "locale": "en"
   }
 }

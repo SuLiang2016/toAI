@@ -23,6 +23,7 @@ const APP_OWNED_LOCAL_STORAGE_KEYS = [
   'currentConversationId',
   'conversationDrafts',
   'newConversationDraft',
+  'locale',
   'promptTemplates',
   'providerPresets',
   'activeProviderPresetId',
@@ -162,6 +163,7 @@ async function captureAppOwnedLocalStorage(browserWindow) {
         currentConversationId: window.localStorage.getItem('currentConversationId'),
         conversationDrafts: readJson('conversationDrafts'),
         newConversationDraft: window.localStorage.getItem('newConversationDraft'),
+        locale: window.localStorage.getItem('locale'),
         promptTemplates: readJson('promptTemplates'),
         providerPresets: readJson('providerPresets'),
         activeProviderPresetId: window.localStorage.getItem('activeProviderPresetId'),
@@ -191,6 +193,11 @@ async function applyAppOwnedLocalStorage(browserWindow, snapshot) {
       }
       writeJson('conversationDrafts', snapshot.conversationDrafts || {});
       window.localStorage.setItem('newConversationDraft', snapshot.newConversationDraft || '');
+      if (snapshot.locale) {
+        window.localStorage.setItem('locale', snapshot.locale);
+      } else {
+        window.localStorage.removeItem('locale');
+      }
       writeJson('promptTemplates', snapshot.promptTemplates || []);
       writeJson('providerPresets', snapshot.providerPresets || []);
       if (snapshot.activeProviderPresetId) {

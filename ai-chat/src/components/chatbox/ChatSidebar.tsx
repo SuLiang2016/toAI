@@ -1,4 +1,5 @@
-import type { KeyboardEvent, RefObject } from 'react';
+﻿import type { KeyboardEvent, RefObject } from 'react';
+import { useCurrentLocale, useTranslate } from '@/i18n';
 import type { Conversation, PromptTemplate } from '@/types/chat';
 
 interface ChatSidebarProps {
@@ -56,11 +57,17 @@ export default function ChatSidebar({
   onDeleteTemplate,
   onCleanDrafts,
 }: ChatSidebarProps) {
+  const t = useTranslate();
+  const { locale } = useCurrentLocale();
+
   const emptyConversationLabel = searchQuery.trim()
-    ? `No ${showArchived ? 'archived ' : ''}conversations match "${searchQuery.trim()}".`
+    ? t('sidebar.emptySearch', {
+        scope: showArchived ? t('sidebar.archivedScope') : '',
+        query: searchQuery.trim(),
+      })
     : showArchived
-      ? 'No archived conversations yet.'
-      : 'No active conversations yet. Start a new chat or restore a backup.';
+      ? t('sidebar.emptyArchived')
+      : t('sidebar.emptyActive');
 
   return (
     <aside className="flex w-80 max-w-full flex-col border-r border-gray-200 bg-white">
@@ -70,7 +77,7 @@ export default function ChatSidebar({
           className="w-full rounded-lg bg-blue-500 px-4 py-2 text-white transition-colors hover:bg-blue-600"
           type="button"
         >
-          + New chat
+          {t('sidebar.newChat')}
         </button>
 
         <div className="mt-3 flex items-center gap-2">
@@ -81,18 +88,18 @@ export default function ChatSidebar({
             }`}
             type="button"
           >
-            {showArchived ? `Archived (${archivedCount})` : 'Inbox'}
+            {showArchived ? t('sidebar.archivedCount', { count: archivedCount }) : t('sidebar.inbox')}
           </button>
-          <span className="text-[11px] text-gray-400">Ctrl/Cmd+K search, Alt+N new chat</span>
+          <span className="text-[11px] text-gray-400">{t('sidebar.keyboardHint')}</span>
         </div>
 
         <label className="mt-3 block">
-          <span className="sr-only">Search conversations</span>
+          <span className="sr-only">{t('sidebar.searchSrOnly')}</span>
           <input
             ref={searchInputRef}
             value={searchQuery}
             onChange={event => onSearchChange(event.target.value)}
-            placeholder={showArchived ? 'Search archived conversations' : 'Search conversations'}
+            placeholder={showArchived ? t('sidebar.searchArchived') : t('sidebar.search')}
             className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </label>
@@ -130,14 +137,17 @@ export default function ChatSidebar({
                   <div className="truncate text-sm font-medium text-gray-900">{conversation.title}</div>
                 </div>
                 <div className="mt-1 text-xs text-gray-500">
-                  {showArchived ? 'Archived' : 'Updated'} {new Date(conversation.updatedAt).toLocaleDateString()}
+                  {showArchived ? t('sidebar.archived') : t('sidebar.updated')}{' '}
+                  {new Date(conversation.updatedAt).toLocaleDateString(locale)}
                 </div>
               </button>
               <button
                 onClick={() => onToggleConversationPinned(conversation.id)}
                 className="rounded p-1 text-gray-400 opacity-0 transition hover:bg-amber-50 hover:text-amber-600 group-hover:opacity-100"
-                title={conversation.pinned ? 'Unpin conversation' : 'Pin conversation'}
-                aria-label={conversation.pinned ? `Unpin conversation ${conversation.title}` : `Pin conversation ${conversation.title}`}
+                title={conversation.pinned ? t('sidebar.unpinConversation') : t('sidebar.pinConversation')}
+                aria-label={conversation.pinned
+                  ? t('sidebar.unpinConversationAria', { title: conversation.title })
+                  : t('sidebar.pinConversationAria', { title: conversation.title })}
                 type="button"
               >
                 <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
@@ -147,8 +157,10 @@ export default function ChatSidebar({
               <button
                 onClick={() => onToggleConversationArchived(conversation.id)}
                 className="rounded p-1 text-gray-400 opacity-0 transition hover:bg-blue-50 hover:text-blue-600 group-hover:opacity-100"
-                title={conversation.archived ? 'Move to inbox' : 'Archive conversation'}
-                aria-label={conversation.archived ? `Move conversation ${conversation.title} to inbox` : `Archive conversation ${conversation.title}`}
+                title={conversation.archived ? t('sidebar.moveToInbox') : t('sidebar.archiveConversation')}
+                aria-label={conversation.archived
+                  ? t('sidebar.moveToInboxAria', { title: conversation.title })
+                  : t('sidebar.archiveConversationAria', { title: conversation.title })}
                 type="button"
               >
                 <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -158,8 +170,8 @@ export default function ChatSidebar({
               <button
                 onClick={() => onStartRename(conversation)}
                 className="rounded p-1 text-gray-400 opacity-0 transition hover:bg-gray-100 hover:text-gray-700 group-hover:opacity-100"
-                title="Rename conversation"
-                aria-label={`Rename conversation ${conversation.title}`}
+                title={t('sidebar.renameConversation')}
+                aria-label={t('sidebar.renameConversationAria', { title: conversation.title })}
                 type="button"
               >
                 <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -169,8 +181,8 @@ export default function ChatSidebar({
               <button
                 onClick={() => onDeleteConversation(conversation.id)}
                 className="rounded p-1 text-gray-400 opacity-0 transition hover:bg-red-50 hover:text-red-600 group-hover:opacity-100"
-                title="Delete conversation"
-                aria-label={`Delete conversation ${conversation.title}`}
+                title={t('sidebar.deleteConversation')}
+                aria-label={t('sidebar.deleteConversationAria', { title: conversation.title })}
                 type="button"
               >
                 <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -185,9 +197,9 @@ export default function ChatSidebar({
 
         <div className="border-t border-gray-200 px-3 py-3">
           <div className="mb-2 flex items-center justify-between gap-2">
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Templates</h2>
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">{t('sidebar.templates')}</h2>
             <button onClick={onOpenNewTemplate} className="rounded px-2 py-1 text-xs text-blue-600 hover:bg-blue-50" type="button">
-              Add
+              {t('sidebar.addTemplate')}
             </button>
           </div>
 
@@ -198,7 +210,7 @@ export default function ChatSidebar({
                   <button
                     onClick={() => onInsertTemplate(template)}
                     className="block w-full text-left"
-                    title="Insert template"
+                    title={t('sidebar.insertTemplate')}
                     type="button"
                   >
                     <div className="truncate text-sm font-medium text-gray-900">{template.title}</div>
@@ -206,10 +218,10 @@ export default function ChatSidebar({
                   </button>
                   <div className="mt-2 flex justify-end gap-1">
                     <button onClick={() => onOpenEditTemplate(template)} className="rounded px-2 py-1 text-xs text-gray-600 hover:bg-gray-100" type="button">
-                      Edit
+                      {t('common.edit')}
                     </button>
                     <button onClick={() => onDeleteTemplate(template.id)} className="rounded px-2 py-1 text-xs text-red-600 hover:bg-red-50" type="button">
-                      Delete
+                      {t('common.delete')}
                     </button>
                   </div>
                 </div>
@@ -217,20 +229,20 @@ export default function ChatSidebar({
             </div>
           ) : (
             <div className="rounded-md border border-dashed border-gray-200 px-3 py-2 text-xs text-gray-500">
-              No templates yet
+              {t('sidebar.noTemplates')}
             </div>
           )}
         </div>
 
         <div className="border-t border-gray-200 px-3 py-3 text-xs text-gray-500">
           <div className="flex items-center justify-between">
-            <span>{filteredConversations.length} shown</span>
+            <span>{t('sidebar.shownCount', { count: filteredConversations.length })}</span>
             <button onClick={onCleanDrafts} className="rounded px-2 py-1 text-xs text-gray-600 hover:bg-gray-100" type="button">
-              Clean drafts
+              {t('sidebar.cleanDrafts')}
             </button>
           </div>
           <div className="mt-2 text-[11px] text-gray-400">
-            Total loaded: {conversations.length} | Archived: {archivedCount}
+            {t('sidebar.totalLoadedArchived', { total: conversations.length, archived: archivedCount })}
           </div>
         </div>
       </div>

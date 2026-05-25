@@ -1,4 +1,5 @@
 import type {
+  AppLocale,
   Conversation,
   Message,
   PromptTemplate,
@@ -8,6 +9,7 @@ import type {
   ProviderSettings,
   ProviderSnapshot,
 } from '@/types/chat';
+import { DEFAULT_LOCALE, getMessage, isLocale, LOCALE_COOKIE_NAME, LOCALE_STORAGE_KEY } from '@/i18n';
 
 export const STORAGE_SCHEMA_VERSION = 2;
 export const BACKUP_FORMAT_VERSION = 1;
@@ -19,6 +21,7 @@ export const PROMPT_TEMPLATES_KEY = 'promptTemplates';
 export const PROVIDER_PRESETS_KEY = 'providerPresets';
 export const ACTIVE_PROVIDER_PRESET_KEY = 'activeProviderPresetId';
 export const PROVIDER_SETTINGS_KEY = 'providerSettings';
+export const LOCALE_PREFERENCE_KEY = LOCALE_STORAGE_KEY;
 
 const LEGACY_DEFAULT_BASE_URL = 'https://api.openai.com/v1';
 const LEGACY_DEFAULT_MODEL = 'gpt-3.5-turbo';
@@ -39,6 +42,7 @@ export interface ProviderValidationResult {
 export interface AppBackupLocalStorage {
   conversations: Conversation[];
   activeConversationId: string | null;
+  locale: AppLocale | null;
   conversationDrafts: Record<string, string>;
   newConversationDraft: string;
   promptTemplates: PromptTemplate[];
@@ -68,6 +72,7 @@ const APP_OWNED_STORAGE_KEYS = [
   ACTIVE_CONVERSATION_KEY,
   CONVERSATION_DRAFTS_KEY,
   NEW_CONVERSATION_DRAFT_KEY,
+  LOCALE_PREFERENCE_KEY,
   PROMPT_TEMPLATES_KEY,
   PROVIDER_PRESETS_KEY,
   ACTIVE_PROVIDER_PRESET_KEY,
@@ -113,6 +118,30 @@ export function saveActiveConversationId(conversationId: string | null) {
   } else {
     window.localStorage.removeItem(ACTIVE_CONVERSATION_KEY);
   }
+}
+
+export function loadStoredLocale(): AppLocale {
+  if (typeof window === 'undefined') return DEFAULT_LOCALE;
+
+  try {
+    const storedLocale = window.localStorage.getItem(LOCALE_PREFERENCE_KEY);
+    return isLocale(storedLocale) ? storedLocale : DEFAULT_LOCALE;
+  } catch {
+    return DEFAULT_LOCALE;
+  }
+}
+
+export function saveStoredLocale(locale: AppLocale | null) {
+  if (typeof window === 'undefined') return;
+
+  if (!locale) {
+    window.localStorage.removeItem(LOCALE_PREFERENCE_KEY);
+    document.cookie = `${LOCALE_COOKIE_NAME}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax`;
+    return;
+  }
+
+  window.localStorage.setItem(LOCALE_PREFERENCE_KEY, locale);
+  document.cookie = `${LOCALE_COOKIE_NAME}=${encodeURIComponent(locale)}; path=/; max-age=31536000; SameSite=Lax`;
 }
 
 export function loadDraftForConversation(conversationId: string | null): string {
@@ -295,22 +324,22 @@ export function emptyToUndefined(settings: ProviderSettings): ProviderSettings |
   return hasBaseUrl || hasModel || hasAttachmentOverride || hasCapabilities ? settings : undefined;
 }
 
-export function validateProviderSettings(settings?: ProviderSettings): ProviderValidationResult {
+export function validateProviderSettings(settings?: ProviderSettings, locale: AppLocale = 'en'): ProviderValidationResult {
   const normalized = normalizeProviderSettings(settings);
 
   if (normalized.baseUrl) {
     try {
       const url = new URL(normalized.baseUrl);
       if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-        return { ok: false, message: 'Provider URL must use http or https.' };
+        return { ok: false, message: getMessage(locale, 'provider.urlProtocol') };
       }
     } catch {
-      return { ok: false, message: 'Provider URL must be a valid HTTP URL.' };
+      return { ok: false, message: getMessage(locale, 'provider.urlInvalid') };
     }
   }
 
   if (normalized.model && /[\r\n\t]/.test(normalized.model)) {
-    return { ok: false, message: 'Model name must be a single line.' };
+    return { ok: false, message: getMessage(locale, 'provider.modelSingleLine') };
   }
 
   return { ok: true, settings: emptyToUndefined(normalized) };
@@ -352,6 +381,7 @@ export function exportAppBackup(createdAt = new Date().toISOString()): AppBackup
     localStorage: {
       conversations,
       activeConversationId: normalizeActiveConversationId(readStoredString(ACTIVE_CONVERSATION_KEY), conversations),
+      locale: readStoredLocaleForBackup(),
       conversationDrafts: filterConversationDrafts(readStoredConversationDraftsForBackup(), conversations),
       newConversationDraft: readStoredString(NEW_CONVERSATION_DRAFT_KEY) ?? '',
       promptTemplates: readStoredPromptTemplatesForBackup(),
@@ -473,6 +503,11 @@ function readLegacyProviderSettingsForBackup(): ProviderSettings | null {
   return isLegacyDefaultProviderSettings(validation as StoredProviderSettings) ? null : validation;
 }
 
+function readStoredLocaleForBackup(): AppLocale | null {
+  const storedLocale = readStoredString(LOCALE_PREFERENCE_KEY);
+  return isLocale(storedLocale) ? storedLocale : null;
+}
+
 function validateBackupLocalStorage(value: unknown): AppBackupLocalStorage {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new Error('Backup file must include a localStorage object.');
@@ -481,6 +516,7 @@ function validateBackupLocalStorage(value: unknown): AppBackupLocalStorage {
   const localStorage = value as Record<string, unknown>;
   const conversations = validateConversationList(localStorage.conversations);
   const activeConversationId = validateNullableString(localStorage.activeConversationId, 'activeConversationId');
+  const locale = validateOptionalLocale(localStorage.locale, 'locale');
   const conversationDrafts = validateDraftMap(localStorage.conversationDrafts);
   const newConversationDraft = validateRequiredString(localStorage.newConversationDraft, 'newConversationDraft');
   const promptTemplates = validatePromptTemplateList(localStorage.promptTemplates);
@@ -510,6 +546,7 @@ function validateBackupLocalStorage(value: unknown): AppBackupLocalStorage {
   return {
     conversations,
     activeConversationId,
+    locale,
     conversationDrafts,
     newConversationDraft,
     promptTemplates,
@@ -517,6 +554,15 @@ function validateBackupLocalStorage(value: unknown): AppBackupLocalStorage {
     activeProviderPresetId,
     legacyProviderSettings,
   };
+}
+
+function validateOptionalLocale(value: unknown, fieldName: string): AppLocale | null {
+  if (value === undefined || value === null) return null;
+  if (!isLocale(value)) {
+    throw new Error(`${fieldName} must be "zh-CN", "en", or null.`);
+  }
+
+  return value;
 }
 
 function normalizeConversation(value: unknown): Conversation | null {
@@ -771,6 +817,7 @@ function validateOptionalProviderSettings(value: unknown, fieldName: string): Pr
 function applyBackupLocalStorage(localStorage: AppBackupLocalStorage) {
   saveConversations(localStorage.conversations);
   saveActiveConversationId(localStorage.activeConversationId);
+  saveStoredLocale(localStorage.locale);
   saveConversationDrafts(localStorage.conversationDrafts);
   saveDraftForConversation(null, localStorage.newConversationDraft);
   savePromptTemplates(localStorage.promptTemplates);

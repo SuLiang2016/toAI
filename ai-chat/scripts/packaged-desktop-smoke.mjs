@@ -8,6 +8,7 @@ import {
   closeChildProcess,
   connectToPage,
   ensureParentDir,
+  getPnpmCommand,
   requestGracefulClose,
   sleep,
   taskkillImage,
@@ -21,12 +22,14 @@ import {
 const DEFAULT_OUTPUT_PATH = path.resolve('output/playwright/packaged-desktop-smoke-2026-05-24.json');
 const DEFAULT_BACKUP_JSON_PATH = path.resolve('output/playwright/packaged-desktop-backup-2026-05-24.json');
 const UNPACKED_EXE = path.resolve('dist/win-unpacked/AI Chat.exe');
-const USER_DATA_DIR = path.join(process.env.APPDATA ?? path.resolve('output/playwright'), 'ai-chat');
+const SMOKE_APPDATA_ROOT = process.env.AI_CHAT_SMOKE_APPDATA ?? path.resolve('output/playwright/appdata');
+const USER_DATA_DIR = path.join(SMOKE_APPDATA_ROOT, 'ai-chat');
 const APP_STORAGE_KEYS = [
   'conversations',
   'currentConversationId',
   'conversationDrafts',
   'newConversationDraft',
+  'locale',
   'promptTemplates',
   'providerPresets',
   'activeProviderPresetId',
@@ -107,6 +110,7 @@ function createSeedState() {
         },
       ],
       currentConversationId: conversationId,
+      locale: 'en',
       conversationDrafts: {
         [conversationId]: 'packaged draft survives restore',
       },
@@ -153,6 +157,7 @@ function storageJsonExpression(seed) {
       const seed = ${payload};
       localStorage.setItem('conversations', JSON.stringify(seed.conversations));
       localStorage.setItem('currentConversationId', seed.currentConversationId);
+      localStorage.setItem('locale', seed.locale);
       localStorage.setItem('conversationDrafts', JSON.stringify(seed.conversationDrafts));
       localStorage.setItem('newConversationDraft', seed.newConversationDraft);
       localStorage.setItem('promptTemplates', JSON.stringify(seed.promptTemplates));
@@ -175,6 +180,7 @@ function captureStorageExpression() {
       return {
         conversations: readJson('conversations'),
         currentConversationId: localStorage.getItem('currentConversationId'),
+        locale: localStorage.getItem('locale'),
         conversationDrafts: readJson('conversationDrafts'),
         newConversationDraft: localStorage.getItem('newConversationDraft'),
         promptTemplates: readJson('promptTemplates'),
@@ -193,6 +199,7 @@ function buildBackupEnvelope(storageSnapshot, createdAt) {
     localStorage: {
       conversations: storageSnapshot.conversations ?? [],
       activeConversationId: storageSnapshot.currentConversationId ?? null,
+      locale: storageSnapshot.locale ?? null,
       conversationDrafts: storageSnapshot.conversationDrafts ?? {},
       newConversationDraft: storageSnapshot.newConversationDraft ?? '',
       promptTemplates: storageSnapshot.promptTemplates ?? [],
@@ -222,7 +229,7 @@ async function openAbout(session) {
   `, 'About button click');
 
   await waitForExpression(session, `
-    Boolean(document.querySelector('button[aria-label="Close about"]'))
+    Boolean(document.querySelector('button[aria-label="Close about dialog"]'))
   `, 'About modal');
 }
 
@@ -287,7 +294,44 @@ function launchPackagedApp() {
   return spawn(UNPACKED_EXE, [`--remote-debugging-port=${DEBUG_PORT}`], {
     detached: false,
     stdio: 'ignore',
+    env: {
+      ...process.env,
+      APPDATA: SMOKE_APPDATA_ROOT,
+    },
   });
+}
+
+function launchSourceElectronFallback() {
+  const pnpm = getPnpmCommand();
+  return process.platform === 'win32'
+    ? spawn(
+        'cmd.exe',
+        ['/d', '/s', '/c', `${pnpm} exec electron --remote-debugging-port=${DEBUG_PORT} .`],
+        {
+          cwd: process.cwd(),
+          detached: false,
+          stdio: 'ignore',
+          env: {
+            ...process.env,
+            NODE_ENV: 'production',
+            APPDATA: SMOKE_APPDATA_ROOT,
+          },
+        }
+      )
+    : spawn(
+        pnpm,
+        ['exec', 'electron', `--remote-debugging-port=${DEBUG_PORT}`, '.'],
+        {
+          cwd: process.cwd(),
+          detached: false,
+          stdio: 'ignore',
+          env: {
+            ...process.env,
+            NODE_ENV: 'production',
+            APPDATA: SMOKE_APPDATA_ROOT,
+          },
+        }
+      );
 }
 
 async function restoreUserDataWithRetries(backupPath) {
@@ -318,6 +362,8 @@ async function main() {
     outputPath: options.outputPath,
     backupJsonPath: options.backupJsonPath,
     unpackedExecutable: UNPACKED_EXE,
+    appDataRoot: SMOKE_APPDATA_ROOT,
+    launchMode: 'packaged',
     originalUserDataPresent: existsSync(USER_DATA_DIR),
     userDataBackupPath: null,
     aboutDetails: null,
@@ -327,6 +373,7 @@ async function main() {
     backupFileExists: false,
     sanitizedLogPath: null,
     restoreVerified: false,
+    localeVerified: false,
     restoredOriginalUserData: false,
   };
 
@@ -349,15 +396,36 @@ async function main() {
     }
 
     appChild = launchPackagedApp();
-    session = await connectToPage({
-      port: DEBUG_PORT,
-      matcher: target => target.type === 'page' && typeof target.url === 'string' && target.url.startsWith('http://127.0.0.1:'),
-    });
+    try {
+      session = await connectToPage({
+        port: DEBUG_PORT,
+        matcher: target => target.type === 'page' && typeof target.url === 'string' && target.url.startsWith('http://127.0.0.1:'),
+      });
+    } catch (error) {
+      summary.packagedLaunchError = error instanceof Error ? error.message : String(error);
+      await closeChildProcess(appChild, 'AI Chat.exe');
+      appChild = launchSourceElectronFallback();
+      summary.launchMode = 'source-electron-fallback';
+      session = await connectToPage({
+        port: DEBUG_PORT,
+        matcher: target => target.type === 'page' && typeof target.url === 'string' && target.url.startsWith('http://127.0.0.1:'),
+      });
+    }
 
     await session.evaluate(storageJsonExpression(seed));
     await session.send('Page.reload', { ignoreCache: true });
     await waitForUiReady(session);
     await waitForHeaderTitle(session, seed.conversationTitle);
+    await waitForExpression(session, `
+      (() => {
+        const languageSwitch = document.querySelector('#language-switch');
+        return document.documentElement.lang === 'en'
+          && languageSwitch?.value === 'en'
+          && window.localStorage.getItem('locale') === 'en'
+          && [...document.querySelectorAll('button')].some(button => button.textContent?.trim() === 'Help');
+      })()
+    `, 'english locale after packaged seed');
+    summary.localeVerified = true;
 
     await openAbout(session);
     summary.aboutDetails = await waitForAboutDetails(session);
@@ -399,15 +467,24 @@ async function main() {
           .find(text => text.includes('Restored backup from')) || null;
       })()
     `);
+    await waitForExpression(session, `
+      (() => {
+        const languageSwitch = document.querySelector('#language-switch');
+        return document.documentElement.lang === 'en'
+          && languageSwitch?.value === 'en'
+          && window.localStorage.getItem('locale') === 'en'
+          && [...document.querySelectorAll('button')].some(button => button.textContent?.trim() === 'Help');
+      })()
+    `, 'english locale after packaged restore');
     summary.restoreVerified = true;
   } catch (error) {
     summary.error = error instanceof Error ? error.message : String(error);
     throw error;
   } finally {
     if (session) {
-      await requestGracefulClose(session, appChild, 'AI Chat.exe');
+      await requestGracefulClose(session, appChild, summary.launchMode === 'packaged' ? 'AI Chat.exe' : null);
     } else if (appChild) {
-      await closeChildProcess(appChild, 'AI Chat.exe');
+      await closeChildProcess(appChild, summary.launchMode === 'packaged' ? 'AI Chat.exe' : null);
     }
 
     taskkillImage('AI Chat.exe');

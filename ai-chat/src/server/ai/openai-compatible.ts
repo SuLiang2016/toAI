@@ -1,3 +1,4 @@
+import { getMessage } from '@/i18n';
 import { ChatRequest, ChatRequestMessage } from '@/types/chat';
 import { getProviderConfig, ProviderError, sanitizeProviderMessage } from './config';
 
@@ -11,7 +12,8 @@ interface OpenAIMessage {
 }
 
 export async function createOpenAICompatibleStream(request: ChatRequest): Promise<Response> {
-  const config = getProviderConfig(request.settings);
+  const locale = request.locale ?? 'en';
+  const config = getProviderConfig(request.settings, locale);
   const upstream = await fetch(`${config.baseUrl}/chat/completions`, {
     method: 'POST',
     headers: {
@@ -20,17 +22,17 @@ export async function createOpenAICompatibleStream(request: ChatRequest): Promis
     },
     body: JSON.stringify({
       model: config.model,
-      messages: mapMessages(request.messages, config.supportsAttachments),
+      messages: mapMessages(request.messages, config.supportsAttachments, locale),
       stream: true,
     }),
   });
 
   if (!upstream.ok) {
-    throw new ProviderError(await readUpstreamError(upstream), upstream.status);
+    throw new ProviderError(await readUpstreamError(upstream, locale), upstream.status);
   }
 
   if (!upstream.body) {
-    throw new ProviderError('AI service returned an empty response stream', 502);
+    throw new ProviderError(getMessage(locale, 'provider.emptyStream'), 502);
   }
 
   return new Response(upstream.body, {
@@ -42,7 +44,7 @@ export async function createOpenAICompatibleStream(request: ChatRequest): Promis
   });
 }
 
-function mapMessages(messages: ChatRequestMessage[], supportsAttachments: boolean): OpenAIMessage[] {
+function mapMessages(messages: ChatRequestMessage[], supportsAttachments: boolean, locale: ChatRequest['locale'] = 'en'): OpenAIMessage[] {
   return messages.map(message => {
     if (!message.attachments?.length) {
       return {
@@ -52,7 +54,7 @@ function mapMessages(messages: ChatRequestMessage[], supportsAttachments: boolea
     }
 
     if (!supportsAttachments) {
-      throw new ProviderError('The active model does not support attachments. Remove attachments or enable an attachment-capable preset.', 400);
+      throw new ProviderError(getMessage(locale, 'provider.attachmentsUnsupported'), 400);
     }
 
     const content: OpenAIContentPart[] = [];
@@ -62,7 +64,7 @@ function mapMessages(messages: ChatRequestMessage[], supportsAttachments: boolea
 
     for (const attachment of message.attachments) {
       if (attachment.type !== 'image' || !attachment.data) {
-        throw new ProviderError('This attachment flow only supports direct image uploads. Convert other files to text first.', 400);
+        throw new ProviderError(getMessage(locale, 'provider.nonImageAttachmentUnsupported'), 400);
       }
 
       content.push({
@@ -78,11 +80,11 @@ function mapMessages(messages: ChatRequestMessage[], supportsAttachments: boolea
   });
 }
 
-async function readUpstreamError(response: Response): Promise<string> {
+async function readUpstreamError(response: Response, locale: ChatRequest['locale'] = 'en'): Promise<string> {
   try {
     const body = await response.json();
-    return sanitizeProviderMessage(body?.error?.message || body?.message);
+    return sanitizeProviderMessage(body?.error?.message || body?.message, locale);
   } catch {
-    return sanitizeProviderMessage(await response.text());
+    return sanitizeProviderMessage(await response.text(), locale);
   }
 }

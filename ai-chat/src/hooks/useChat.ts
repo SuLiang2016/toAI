@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import type { MutableRefObject } from 'react';
+import { useCurrentLocale, useTranslate } from '@/i18n';
 import { consumeSseBuffer, readStreamEventContent, StreamingParseError } from '@/lib/streaming';
 import { validateProviderSettings } from '@/lib/storage';
 import {
@@ -14,6 +15,8 @@ import {
 } from '@/lib/chat-client';
 import type { ChatErrorState, ChatRequest, Message, ProviderSettings } from '@/types/chat';
 
+type TranslateFn = ReturnType<typeof useTranslate>;
+
 interface UseChatOptions {
   initialMessages?: Message[];
   onMessagesChange?: (messages: Message[]) => void;
@@ -22,6 +25,8 @@ interface UseChatOptions {
 
 export function useChat(options?: UseChatOptions) {
   const { initialMessages = [], onMessagesChange, getSettings } = options ?? {};
+  const t = useTranslate();
+  const { locale } = useCurrentLocale();
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [isLoading, setIsLoading] = useState(false);
   const [errorState, setErrorState] = useState<ChatErrorState | null>(null);
@@ -39,19 +44,23 @@ export function useChat(options?: UseChatOptions) {
       content,
       attachments,
       getSettings,
+      locale,
+      t,
       updateMessages,
       messagesRef,
       setIsLoading,
       setErrorState,
       abortControllerRef,
     });
-  }, [getSettings, updateMessages]);
+  }, [getSettings, locale, t, updateMessages]);
 
   const resendFromMessages = useCallback(async (nextMessages: Message[]): Promise<boolean> => {
     return submitChatTurn({
       content: '',
       attachments: undefined,
       getSettings,
+      locale,
+      t,
       updateMessages,
       messagesRef,
       setIsLoading,
@@ -60,7 +69,7 @@ export function useChat(options?: UseChatOptions) {
       baseMessages: nextMessages,
       skipUserMessageCreation: true,
     });
-  }, [getSettings, updateMessages]);
+  }, [getSettings, locale, t, updateMessages]);
 
   const stopGeneration = useCallback(() => {
     if (abortControllerRef.current) {
@@ -113,6 +122,8 @@ interface ChatSubmissionOptions {
   content: string;
   attachments?: File[];
   getSettings?: () => Promise<ProviderSettings | undefined>;
+  locale: 'zh-CN' | 'en';
+  t: TranslateFn;
   updateMessages: (messages: Message[]) => void;
   messagesRef: MutableRefObject<Message[]>;
   setIsLoading: (loading: boolean) => void;
@@ -126,6 +137,8 @@ async function submitChatTurn({
   content,
   attachments,
   getSettings,
+  locale,
+  t,
   updateMessages,
   messagesRef,
   setIsLoading,
@@ -155,9 +168,9 @@ async function submitChatTurn({
     setErrorState(null);
 
     abortControllerRef.current = new AbortController();
-    const providerValidation = validateProviderSettings(await getSettings?.());
+    const providerValidation = validateProviderSettings(await getSettings?.(), locale);
     if (!providerValidation.ok) {
-      throw new ChatSubmissionError('validation_error', providerValidation.message || 'Provider settings are invalid');
+      throw new ChatSubmissionError('validation_error', providerValidation.message || t('provider.settingsInvalid'));
     }
 
     const requestBody: ChatRequest = {
@@ -173,6 +186,7 @@ async function submitChatTurn({
         })),
       })),
       settings: providerValidation.settings,
+      locale,
     };
 
     const response = await fetch('/api/chat', {
@@ -183,12 +197,12 @@ async function submitChatTurn({
     });
 
     if (!response.ok) {
-      throw new ChatSubmissionError('upstream_error', await readErrorResponse(response));
+      throw new ChatSubmissionError('upstream_error', await readErrorResponse(response, t('chat.requestFailedStatus', { status: response.status })));
     }
 
     const reader = response.body?.getReader();
     if (!reader) {
-      throw new ChatSubmissionError('upstream_error', 'AI service returned no response stream');
+      throw new ChatSubmissionError('upstream_error', t('chat.emptyResponseStream'));
     }
 
     const decoder = new TextDecoder();
@@ -237,7 +251,7 @@ async function submitChatTurn({
 
     if (!sawDone) {
       setAssistantMessageStatus(assistantMessage.id, assistantContent ? 'partial' : 'error', () => messagesRef.current, updateMessages);
-      throw new ChatSubmissionError('incomplete_stream', 'AI response stream ended before the completion marker');
+      throw new ChatSubmissionError('incomplete_stream', t('chat.incompleteResponse'));
     }
 
     setAssistantMessageStatus(assistantMessage.id, 'complete', () => messagesRef.current, updateMessages);
@@ -247,7 +261,7 @@ async function submitChatTurn({
       markLatestAssistantMessage('aborted', () => messagesRef.current, updateMessages);
       setErrorState({
         kind: 'abort',
-        message: 'Generation stopped. Partial response preserved.',
+        message: t('chat.generationStopped'),
         recoverable: true,
       });
     } else if (err instanceof ChatSubmissionError) {
@@ -269,7 +283,7 @@ async function submitChatTurn({
     } else {
       setErrorState({
         kind: 'network_error',
-        message: sanitizeClientError(err instanceof Error ? err.message : 'Failed to send message'),
+        message: sanitizeClientError(err instanceof Error ? err.message : t('chat.failedToSend')),
         recoverable: true,
       });
       console.error('Chat error:', err);

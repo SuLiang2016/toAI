@@ -5,10 +5,12 @@ import MessageList from './MessageList';
 import InputArea from './InputArea';
 import AboutModal from './chatbox/AboutModal';
 import ChatSidebar from './chatbox/ChatSidebar';
+import HelpModal from './chatbox/HelpModal';
 import ProviderPresetsModal from './chatbox/ProviderPresetsModal';
 import RenameConversationModal from './chatbox/RenameConversationModal';
 import TemplateEditorModal from './chatbox/TemplateEditorModal';
 import { createConversationTitle, createTemplateTitle } from './chatbox/chatbox-utils';
+import { getInAppHelp } from '@/content/in-app-help';
 import type {
   AboutInfo,
   DiagnosticsInfo,
@@ -16,6 +18,7 @@ import type {
   TemplateFormDraft,
 } from './chatbox/types';
 import { useChat } from '@/hooks/useChat';
+import { SUPPORTED_LOCALES, type Locale, useCurrentLocale, useTranslate } from '@/i18n';
 import {
   clearDraftForConversation,
   createProviderSnapshot,
@@ -45,6 +48,8 @@ import {
 } from '@/lib/storage';
 import type { Conversation, Message, PromptTemplate, ProviderPreset, ProviderSnapshot } from '@/types/chat';
 
+type TranslateFn = ReturnType<typeof useTranslate>;
+
 const EMPTY_TEMPLATE_FORM: TemplateFormDraft = {
   id: null,
   title: '',
@@ -64,12 +69,15 @@ const EMPTY_PROVIDER_PRESET_FORM: ProviderPresetFormDraft = {
 };
 
 export default function ChatBox() {
+  const t = useTranslate();
+  const { locale, setLocale } = useCurrentLocale();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [currentConvId, setCurrentConvId] = useState<string | null>(null);
   const [showSidebar, setShowSidebar] = useState(true);
   const [showArchived, setShowArchived] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
   const [draftText, setDraftText] = useState('');
   const [promptTemplates, setPromptTemplates] = useState<PromptTemplate[]>([]);
   const [showTemplateEditor, setShowTemplateEditor] = useState(false);
@@ -93,6 +101,7 @@ export default function ChatBox() {
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const conversationButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const providerSnapshotRef = useRef<ProviderSnapshot>(createProviderSnapshot());
+  const helpContent = useMemo(() => getInAppHelp(locale), [locale]);
 
   const currentConversation = conversations.find(conversation => conversation.id === currentConvId) ?? null;
   const activeProviderPreset = providerPresets.find(preset => preset.id === activeProviderPresetId) ?? null;
@@ -138,12 +147,15 @@ export default function ChatBox() {
   );
   const storageHealth = getStorageHealthSummary();
   const storageWarning = storageHealth.overSoftLimit
-    ? `Local AI Chat data is ${formatBytes(storageHealth.appDataBytes)}. Export a backup or clean drafts before this grows further.`
+    ? t('chat.storageWarning', { size: formatBytes(storageHealth.appDataBytes) })
     : null;
   const recoveryHint = storageHealth.quarantinedRecordCount > 0
-    ? `${storageHealth.quarantinedRecordCount} corrupted local record(s) were quarantined earlier. Export a backup after verifying your active conversations.`
+    ? t('chat.recoveryHint', { count: storageHealth.quarantinedRecordCount })
     : null;
-  const storageHealthSummary = `App-owned local data uses ${formatBytes(storageHealth.appDataBytes)} of a ${formatBytes(storageHealth.softLimitBytes)} soft limit.`;
+  const storageHealthSummary = t('chat.storageHealthSummary', {
+    used: formatBytes(storageHealth.appDataBytes),
+    limit: formatBytes(storageHealth.softLimitBytes),
+  });
 
   const loadDraftIntoState = useCallback((conversationId: string | null) => {
     const nextDraft = loadDraftForConversation(conversationId);
@@ -169,7 +181,7 @@ export default function ChatBox() {
       const existing = previous.find(conversation => conversation.id === conversationId);
       const nextConversation: Conversation = {
         id: conversationId,
-        title: existing?.title || createConversationTitle(nextMessages),
+        title: existing?.title || createConversationTitle(nextMessages, t('chat.newConversation')),
         messages: nextMessages,
         createdAt: existing?.createdAt || Date.now(),
         updatedAt: Date.now(),
@@ -180,7 +192,7 @@ export default function ChatBox() {
       saveConversations(nextConversations);
       return nextConversations;
     });
-  }, []);
+  }, [t]);
 
   const getSettings = useCallback(async () => readActiveProviderSettings(), []);
 
@@ -437,14 +449,14 @@ export default function ChatBox() {
     setProviderError(null);
     const now = Date.now();
     const normalizedDraft = buildProviderSettingsFromDraft(presetDraft);
-    const validation = validateProviderSettings(normalizedDraft);
+    const validation = validateProviderSettings(normalizedDraft, locale);
     if (!validation.ok) {
-      setProviderError(validation.message || 'Provider preset is invalid.');
+      setProviderError(validation.message || t('chat.providerPresetInvalid'));
       return;
     }
 
     const normalizedPreset = validation.settings ?? {};
-    const name = presetDraft.name.trim() || normalizedPreset.model || 'Provider preset';
+    const name = presetDraft.name.trim() || normalizedPreset.model || t('chat.providerPresetFallbackName');
     const nextPresets = presetDraft.id
       ? providerPresets.map(preset =>
           preset.id === presetDraft.id
@@ -545,12 +557,15 @@ export default function ChatBox() {
       const response = await fetch('/api/provider/check', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ settings: activeProviderPreset ? normalizeProviderSettings(activeProviderPreset) : undefined }),
+        body: JSON.stringify({
+          settings: activeProviderPreset ? normalizeProviderSettings(activeProviderPreset) : undefined,
+          locale,
+        }),
       });
       const payload = await response.json();
       if (!response.ok || payload?.ok === false) {
         updateActiveProviderReachability('unreachable');
-        setProviderCheckState(payload?.error || 'Provider connectivity check failed.');
+        setProviderCheckState(payload?.error || t('chat.providerCheckFailed'));
         return;
       }
 
@@ -558,10 +573,12 @@ export default function ChatBox() {
         ...(payload?.model ? { model: payload.model } : {}),
         ...(payload?.capabilities ? { capabilities: payload.capabilities } : {}),
       });
-      setProviderCheckState(`Reachable: ${payload.model || activeProviderPreset?.model || 'model configured'}`);
+      setProviderCheckState(t('chat.providerReachable', {
+        model: payload.model || activeProviderPreset?.model || t('chat.modelConfigured'),
+      }));
     } catch (error) {
       updateActiveProviderReachability('unreachable');
-      setProviderCheckState(error instanceof Error ? error.message : 'Provider connectivity check failed.');
+      setProviderCheckState(error instanceof Error ? error.message : t('chat.providerCheckFailed'));
     } finally {
       setProviderCheckInFlight(false);
     }
@@ -582,6 +599,10 @@ export default function ChatBox() {
     setShowAbout(true);
   };
 
+  const openHelp = () => {
+    setShowHelp(true);
+  };
+
   const exportBackup = () => {
     try {
       const backup = exportAppBackup();
@@ -593,10 +614,10 @@ export default function ChatBox() {
       downloadLink.href = backupUrl;
       downloadLink.download = `ai-chat-backup-${safeTimestamp}.json`;
       downloadLink.click();
-      setBackupActionStatus(`Exported backup created at ${backup.createdAt}.`);
+      setBackupActionStatus(t('backup.exportedAt', { createdAt: backup.createdAt }));
       window.setTimeout(() => URL.revokeObjectURL(backupUrl), 0);
     } catch (error) {
-      setBackupActionStatus(error instanceof Error ? error.message : 'Backup export failed.');
+      setBackupActionStatus(error instanceof Error ? error.message : t('backup.exportFailed'));
     }
   };
 
@@ -613,40 +634,40 @@ export default function ChatBox() {
       const serializedBackup = await file.text();
       const backup = parseAppBackupJson(serializedBackup);
       const confirmation = window.confirm([
-        `Restore backup from ${backup.createdAt}?`,
+        t('backup.restorePrompt', { createdAt: backup.createdAt }),
         '',
-        'This replaces all current AI Chat local data:',
-        `- ${backup.localStorage.conversations.length} conversations`,
-        `- ${Object.keys(backup.localStorage.conversationDrafts).length} conversation drafts`,
-        `- ${backup.localStorage.promptTemplates.length} prompt templates`,
-        `- ${backup.localStorage.providerPresets.length} provider presets`,
+        t('backup.restoreDetailsHeading'),
+        t('backup.conversationsCount', { count: backup.localStorage.conversations.length }),
+        t('backup.conversationDraftsCount', { count: Object.keys(backup.localStorage.conversationDrafts).length }),
+        t('backup.promptTemplatesCount', { count: backup.localStorage.promptTemplates.length }),
+        t('backup.providerPresetsCount', { count: backup.localStorage.providerPresets.length }),
         '',
-        'The app will reload after a successful restore.',
+        t('backup.reloadAfterRestore'),
       ].join('\n'));
 
       if (!confirmation) {
-        setBackupActionStatus('Backup restore cancelled.');
+        setBackupActionStatus(t('backup.restoreCancelled'));
         return;
       }
 
       restoreAppBackup(backup);
-      setBackupActionStatus(`Restored backup from ${backup.createdAt}. Reloading...`);
+      setBackupActionStatus(t('backup.restoredReloading', { createdAt: backup.createdAt }));
       window.location.reload();
     } catch (error) {
-      setBackupActionStatus(error instanceof Error ? error.message : 'Backup restore failed.');
+      setBackupActionStatus(error instanceof Error ? error.message : t('backup.restoreFailed'));
     }
   };
 
   const exportLogs = async () => {
     if (!window.aiChat?.exportLogs) return;
     const result = await window.aiChat.exportLogs();
-    setLogActionStatus(`Exported sanitized logs: ${result.path}`);
+    setLogActionStatus(t('logs.exported', { path: result.path }));
   };
 
   const openLogs = async () => {
     if (!window.aiChat?.openLogs) return;
     const result = await window.aiChat.openLogs();
-    setLogActionStatus(result.error ? result.error : `Opened sanitized logs: ${result.path}`);
+    setLogActionStatus(result.error ? result.error : t('logs.opened', { path: result.path }));
   };
 
   const openNewTemplate = () => {
@@ -668,7 +689,7 @@ export default function ChatBox() {
     if (!content) return;
 
     const now = Date.now();
-    const title = templateDraft.title.trim() || createTemplateTitle(content);
+    const title = templateDraft.title.trim() || createTemplateTitle(content, t('templateEditor.untitledFallback'));
     const nextTemplates = templateDraft.id
       ? promptTemplates.map(template =>
           template.id === templateDraft.id
@@ -710,8 +731,8 @@ export default function ChatBox() {
     }
   };
 
-  const currentProviderLabel = activeProviderPreset?.name || activeProviderPreset?.model || 'Environment defaults';
-  const currentProviderStatusLabel = activeProviderPreset?.lastCheckStatus ?? 'unchecked';
+  const currentProviderLabel = activeProviderPreset?.name || activeProviderPreset?.model || t('common.environmentDefaults');
+  const currentProviderStatusLabel = translateProviderStatus(activeProviderPreset?.lastCheckStatus ?? 'unchecked', t);
 
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50">
@@ -752,8 +773,8 @@ export default function ChatBox() {
           <button
             onClick={() => setShowSidebar(!showSidebar)}
             className="rounded-lg p-2 transition-colors hover:bg-gray-100"
-            title={showSidebar ? 'Hide sidebar' : 'Show sidebar'}
-            aria-label={showSidebar ? 'Hide sidebar' : 'Show sidebar'}
+            title={showSidebar ? t('chat.hideSidebar') : t('chat.showSidebar')}
+            aria-label={showSidebar ? t('chat.hideSidebar') : t('chat.showSidebar')}
             type="button"
           >
             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -763,26 +784,50 @@ export default function ChatBox() {
 
           <div className="min-w-0 flex-1">
             <h1 className="truncate text-lg font-semibold text-gray-900">
-              {currentConvId ? currentConversation?.title || 'Chat' : 'New chat'}
+              {currentConvId ? currentConversation?.title || t('chat.defaultTitle') : t('chat.newConversation')}
             </h1>
             <div className="truncate text-xs text-gray-500">
-              Provider: {currentProviderLabel} | {currentProviderStatusLabel}
+              {t('chat.providerSummary', { label: currentProviderLabel, status: currentProviderStatusLabel })}
             </div>
           </div>
 
           <div className="flex items-center gap-1">
-            <button onClick={openAbout} className="rounded-lg p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700" title="About" aria-label="About" type="button">
+            <label className="sr-only" htmlFor="language-switch">
+              {t('language.label')}
+            </label>
+            <select
+              id="language-switch"
+              value={locale}
+              onChange={event => setLocale(event.target.value as Locale)}
+              className="rounded-lg border border-gray-300 bg-white px-2 py-2 text-sm text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              {SUPPORTED_LOCALES.map(option => (
+                <option key={option} value={option}>
+                  {getLocaleOptionLabel(option, t)}
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={openHelp}
+              className="rounded-lg px-3 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900"
+              title={t('chat.help')}
+              aria-label={t('chat.help')}
+              type="button"
+            >
+              {t('chat.help')}
+            </button>
+            <button onClick={openAbout} className="rounded-lg p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700" title={t('chat.about')} aria-label={t('chat.about')} type="button">
               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M12 19a7 7 0 100-14 7 7 0 000 14z" />
               </svg>
             </button>
-            <button onClick={openSettings} className="rounded-lg p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-blue-600" title="Settings" aria-label="Settings" type="button">
+            <button onClick={openSettings} className="rounded-lg p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-blue-600" title={t('chat.settings')} aria-label={t('chat.settings')} type="button">
               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.89 3.31.877 2.42 2.42a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.89 1.543-.877 3.31-2.42 2.42a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.89-3.31-.877-2.42-2.42a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.89-1.543.877-3.31 2.42-2.42.996.574 2.25.055 2.572-1.065z" />
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
             </button>
-            <button onClick={clearMessages} className="rounded-lg p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-red-500" title="Clear conversation" aria-label="Clear conversation" type="button">
+            <button onClick={clearMessages} className="rounded-lg p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-red-500" title={t('chat.clearConversation')} aria-label={t('chat.clearConversation')} type="button">
               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
               </svg>
@@ -860,6 +905,14 @@ export default function ChatBox() {
         />
       )}
 
+      {showHelp && (
+        <HelpModal
+          title={helpContent.title}
+          markdown={helpContent.markdown}
+          onClose={() => setShowHelp(false)}
+        />
+      )}
+
       {showTemplateEditor && (
         <TemplateEditorModal
           templateDraft={templateDraft}
@@ -910,4 +963,18 @@ function formatBytes(bytes: number): string {
   }
 
   return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+}
+
+function translateProviderStatus(
+  status: ProviderPreset['lastCheckStatus'] | 'unchecked',
+  t: TranslateFn
+) {
+  return t(`provider.status.${status}` as Parameters<TranslateFn>[0]);
+}
+
+function getLocaleOptionLabel(
+  locale: Locale,
+  t: TranslateFn
+) {
+  return locale === 'zh-CN' ? t('language.zh-CN') : t('language.en');
 }

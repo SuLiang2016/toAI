@@ -1,3 +1,5 @@
+﻿import { useTranslate } from '@/i18n';
+
 interface RenameConversationModalProps {
   renameDraft: string;
   onRenameDraftChange: (value: string) => void;
@@ -11,10 +13,12 @@ export default function RenameConversationModal({
   onClose,
   onSave,
 }: RenameConversationModalProps) {
+  const t = useTranslate();
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4">
       <div className="w-full max-w-sm rounded-lg bg-white p-5 shadow-xl">
-        <h2 className="mb-3 text-base font-semibold text-gray-900">Rename conversation</h2>
+        <h2 className="mb-3 text-base font-semibold text-gray-900">{t('rename.title')}</h2>
         <input
           value={renameDraft}
           onChange={event => onRenameDraftChange(event.target.value)}
@@ -31,10 +35,10 @@ export default function RenameConversationModal({
         />
         <div className="mt-4 flex justify-end gap-2">
           <button onClick={onClose} className="rounded-md px-3 py-2 text-sm text-gray-700 hover:bg-gray-100" type="button">
-            Cancel
+            {t('common.cancel')}
           </button>
           <button onClick={onSave} className="rounded-md bg-blue-500 px-3 py-2 text-sm text-white hover:bg-blue-600" type="button">
-            Save
+            {t('common.save')}
           </button>
         </div>
       </div>

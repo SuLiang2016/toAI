@@ -1,9 +1,12 @@
-'use client';
+﻿'use client';
 
 /* eslint-disable @next/next/no-img-element */
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { useCurrentLocale, useTranslate } from '@/i18n';
 import { Message } from '@/types/chat';
+
+type TranslateFn = ReturnType<typeof useTranslate>;
 
 interface MessageBubbleProps {
   message: Message;
@@ -22,11 +25,13 @@ export default function MessageBubble({
   onRegenerate,
   onEditResend,
 }: MessageBubbleProps) {
+  const t = useTranslate();
+  const { locale } = useCurrentLocale();
   const isUser = message.role === 'user';
 
   return (
-    <div className={`group flex ${isUser ? 'justify-end' : 'justify-start'} mb-4 animate-fade-in`}>
-      <div className={`max-w-[min(76%,calc(100vw-2rem))] ${isUser ? 'items-end' : 'items-start'} flex flex-col gap-1`}>
+    <div className={`group mb-4 flex animate-fade-in ${isUser ? 'justify-end' : 'justify-start'}`}>
+      <div className={`flex max-w-[min(76%,calc(100vw-2rem))] flex-col gap-1 ${isUser ? 'items-end' : 'items-start'}`}>
         <div
           className={`w-full overflow-hidden rounded-2xl px-4 py-2 ${
             isUser
@@ -74,7 +79,7 @@ export default function MessageBubble({
                           className="absolute right-2 top-2 rounded bg-gray-900/80 px-2 py-1 text-xs text-white opacity-0 transition group-hover/code:opacity-100"
                           type="button"
                         >
-                          Copy
+                          {t('common.copy')}
                         </button>
                         <pre>{children}</pre>
                       </div>
@@ -88,9 +93,9 @@ export default function MessageBubble({
           )}
 
           <div className={`mt-2 text-xs ${isUser ? 'text-blue-100' : 'text-gray-500'}`}>
-            {new Date(message.timestamp).toLocaleTimeString()}
+            {new Date(message.timestamp).toLocaleTimeString(locale)}
             {message.status && message.status !== 'complete' && (
-              <span className="ml-2 uppercase tracking-wide">{message.status.replace('_', ' ')}</span>
+              <span className="ml-2 uppercase tracking-wide">{translateMessageStatus(message.status, t)}</span>
             )}
           </div>
         </div>
@@ -105,7 +110,7 @@ export default function MessageBubble({
             className="rounded px-2 py-1 text-xs text-gray-500 hover:bg-gray-100 hover:text-gray-800"
             type="button"
           >
-            Copy
+            {t('common.copy')}
           </button>
           {isUser ? (
             <button
@@ -113,7 +118,7 @@ export default function MessageBubble({
               className="rounded px-2 py-1 text-xs text-gray-500 hover:bg-gray-100 hover:text-gray-800"
               type="button"
             >
-              Edit
+              {t('message.edit')}
             </button>
           ) : (
             canRegenerate && (
@@ -122,7 +127,7 @@ export default function MessageBubble({
                 className="rounded px-2 py-1 text-xs text-gray-500 hover:bg-gray-100 hover:text-gray-800"
                 type="button"
               >
-                Regenerate
+                {t('message.regenerate')}
               </button>
             )
           )}
@@ -130,6 +135,24 @@ export default function MessageBubble({
       </div>
     </div>
   );
+}
+
+function translateMessageStatus(
+  status: NonNullable<Message['status']>,
+  t: TranslateFn
+) {
+  switch (status) {
+    case 'streaming':
+      return t('message.status.streaming');
+    case 'partial':
+      return t('message.status.partial');
+    case 'aborted':
+      return t('message.status.aborted');
+    case 'error':
+      return t('message.status.error');
+    default:
+      return status;
+  }
 }
 
 function extractText(node: unknown): string {

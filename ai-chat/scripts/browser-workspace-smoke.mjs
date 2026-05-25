@@ -24,6 +24,15 @@ const TARGET_PORT = 3100;
 const TARGET_URL = `http://127.0.0.1:${TARGET_PORT}`;
 const DEBUG_PORT = 9322;
 const PROFILE_DIR = path.resolve(`output/playwright/browser-smoke-profile-${Date.now()}`);
+const HELP_LABEL_ZH = '\u4f7f\u7528\u8bf4\u660e';
+const HELP_CLOSE_ARIA_ZH = '\u5173\u95ed\u4f7f\u7528\u8bf4\u660e';
+const SEARCH_PLACEHOLDER_ZH = '\u641c\u7d22\u4f1a\u8bdd';
+const INBOX_LABEL_ZH = '\u6536\u4ef6\u7bb1';
+const ARCHIVED_PREFIX_ZH = '\u5df2\u5f52\u6863\uff08';
+const NEW_CHAT_LABEL_ZH = '+ \u65b0\u5bf9\u8bdd';
+const DRAFT_ARIA_LABEL_ZH = '\u804a\u5929\u6d88\u606f\u8349\u7a3f';
+const RENAME_ARIA_ZH = title => `\u91cd\u547d\u540d\u4f1a\u8bdd ${title}`;
+const ARCHIVE_ARIA_ZH = title => `\u5f52\u6863\u4f1a\u8bdd ${title}`;
 
 function parseArgs(argv) {
   const options = {
@@ -54,6 +63,7 @@ function createSeedState() {
     renamedConversationTitle: 'Browser smoke renamed',
     draftText: 'Browser smoke draft persists after reload.',
     localStorage: {
+      locale: 'zh-CN',
       conversations: [
         {
           id: conversationId,
@@ -140,6 +150,7 @@ function storageJsonExpression(seed) {
   return `
     (() => {
       const seed = ${payload};
+      localStorage.setItem('locale', seed.locale);
       localStorage.setItem('conversations', JSON.stringify(seed.conversations));
       localStorage.setItem('currentConversationId', seed.currentConversationId);
       localStorage.setItem('conversationDrafts', JSON.stringify(seed.conversationDrafts));
@@ -168,11 +179,15 @@ async function main() {
     targetUrl: TARGET_URL,
     browserExecutable: null,
     profileDir: PROFILE_DIR,
+    defaultLocaleVerified: false,
     seededTitle: null,
+    helpModalVerified: false,
+    helpEntryVisibleAfterReload: false,
     renamedTitle: null,
     searchQuery: 'renamed',
     archivedViewConfirmed: false,
     draftPersistedAfterReload: false,
+    englishLocalePersistedAfterReload: false,
     finalSnapshot: null,
   };
 
@@ -229,38 +244,65 @@ async function main() {
       matcher: target => target.type === 'page' && typeof target.url === 'string' && target.url.startsWith(TARGET_URL),
     });
 
+    await waitForUiReady(session);
+    await waitForExpression(session, `
+      (() => {
+        const languageSwitch = document.querySelector('#language-switch');
+        return document.documentElement.lang === 'zh-CN'
+          && languageSwitch?.value === 'zh-CN'
+          && [...document.querySelectorAll('button')].some(button => button.textContent?.trim() === ${JSON.stringify(HELP_LABEL_ZH)});
+      })()
+    `, 'default zh-CN locale on first launch');
+    summary.defaultLocaleVerified = true;
+
     await session.evaluate(storageJsonExpression(seed));
     await session.send('Page.reload', { ignoreCache: true });
     await waitForUiReady(session);
     await waitForHeaderTitle(session, seed.conversationTitle);
     summary.seededTitle = seed.conversationTitle;
 
-    await clickSelector(session, `button[aria-label="Rename conversation ${seed.conversationTitle}"]`);
+    await clickButtonByText(session, HELP_LABEL_ZH);
+    await waitForExpression(session, `
+      (() => {
+        const text = document.body.textContent || '';
+        return text.includes('\u6a21\u578b\u914d\u7f6e\u4e0e\u5207\u6362')
+          && text.includes('\u63d0\u793a\u8bcd\u6a21\u677f\u7684\u521b\u5efa\u4e0e\u4f7f\u7528')
+          && text.includes('\u521b\u5efa\u4e0e\u5207\u6362\u4f1a\u8bdd');
+      })()
+    `, 'help modal workflow sections');
+    await clickSelector(session, `button[aria-label=${JSON.stringify(HELP_CLOSE_ARIA_ZH)}]`);
+    await waitForExpression(session, `
+      !document.querySelector(${JSON.stringify(`button[aria-label="${HELP_CLOSE_ARIA_ZH}"]`)})
+    `, 'help modal to close');
+    await waitForHeaderTitle(session, seed.conversationTitle);
+    summary.helpModalVerified = true;
+
+    await clickSelector(session, `button[aria-label=${JSON.stringify(RENAME_ARIA_ZH(seed.conversationTitle))}]`);
     await waitForExpression(session, `Boolean(document.querySelector('div.fixed input'))`, 'rename modal input');
     await fillInput(session, 'div.fixed input', seed.renamedConversationTitle);
-    await clickButtonByText(session, 'Save');
+    await clickButtonByText(session, '\u4fdd\u5b58');
     await waitForHeaderTitle(session, seed.renamedConversationTitle);
     summary.renamedTitle = seed.renamedConversationTitle;
 
-    await fillInput(session, 'input[placeholder="Search conversations"]', 'renamed');
+    await fillInput(session, `input[placeholder=${JSON.stringify(SEARCH_PLACEHOLDER_ZH)}]`, 'renamed');
     await waitForExpression(session, `
-      Boolean(document.querySelector(${JSON.stringify(`button[aria-label="Rename conversation ${seed.renamedConversationTitle}"]`)}))
+      Boolean(document.querySelector(${JSON.stringify(`button[aria-label="${RENAME_ARIA_ZH(seed.renamedConversationTitle)}"]`)}))
     `, 'renamed conversation in filtered results');
 
-    await clickSelector(session, `button[aria-label="Archive conversation ${seed.renamedConversationTitle}"]`);
+    await clickSelector(session, `button[aria-label=${JSON.stringify(ARCHIVE_ARIA_ZH(seed.renamedConversationTitle))}]`);
     await waitForExpression(session, `
-      !document.querySelector(${JSON.stringify(`button[aria-label="Rename conversation ${seed.renamedConversationTitle}"]`)})
+      !document.querySelector(${JSON.stringify(`button[aria-label="${RENAME_ARIA_ZH(seed.renamedConversationTitle)}"]`)})
     `, 'renamed conversation removed from inbox view');
-    await clickButtonContainingText(session, 'Inbox');
+    await clickButtonContainingText(session, INBOX_LABEL_ZH);
     await waitForExpression(session, `
-      Boolean(document.querySelector(${JSON.stringify(`button[aria-label="Rename conversation ${seed.renamedConversationTitle}"]`)}))
+      Boolean(document.querySelector(${JSON.stringify(`button[aria-label="${RENAME_ARIA_ZH(seed.renamedConversationTitle)}"]`)}))
     `, 'renamed conversation in archived view');
     summary.archivedViewConfirmed = true;
 
-    await clickButtonContainingText(session, 'Archived (');
-    await fillInput(session, 'input[placeholder="Search conversations"]', '');
-    await clickButtonByText(session, '+ New chat');
-    await fillInput(session, 'textarea[aria-label="Chat message draft"]', seed.draftText);
+    await clickButtonContainingText(session, ARCHIVED_PREFIX_ZH);
+    await fillInput(session, `input[placeholder=${JSON.stringify(SEARCH_PLACEHOLDER_ZH)}]`, '');
+    await clickButtonByText(session, NEW_CHAT_LABEL_ZH);
+    await fillInput(session, `textarea[aria-label=${JSON.stringify(DRAFT_ARIA_LABEL_ZH)}]`, seed.draftText);
     await waitForExpression(session, `
       window.localStorage.getItem('newConversationDraft') === ${JSON.stringify(seed.draftText)}
     `, 'new chat draft to persist');
@@ -268,17 +310,55 @@ async function main() {
     await session.send('Page.reload', { ignoreCache: true });
     await waitForUiReady(session);
     await waitForExpression(session, `
+      [...document.querySelectorAll('button')].some(button => button.textContent?.trim() === ${JSON.stringify(HELP_LABEL_ZH)})
+    `, 'help entry after reload');
+    summary.helpEntryVisibleAfterReload = true;
+    await waitForExpression(session, `
       window.localStorage.getItem('newConversationDraft') === ${JSON.stringify(seed.draftText)}
     `, 'new chat draft key after reload');
-    await clickButtonByText(session, '+ New chat');
+    await clickButtonByText(session, NEW_CHAT_LABEL_ZH);
     await waitForExpression(session, `
-      document.querySelector('textarea[aria-label="Chat message draft"]')?.value === ${JSON.stringify(seed.draftText)}
+      document.querySelector(${JSON.stringify(`textarea[aria-label="${DRAFT_ARIA_LABEL_ZH}"]`)})?.value === ${JSON.stringify(seed.draftText)}
     `, 'new chat draft restored after reload');
     summary.draftPersistedAfterReload = true;
+
+    await session.evaluate(`
+      (() => {
+        const languageSwitch = document.querySelector('#language-switch');
+        if (!languageSwitch) return false;
+        languageSwitch.value = 'en';
+        languageSwitch.dispatchEvent(new Event('change', { bubbles: true }));
+        return true;
+      })()
+    `);
+    await waitForExpression(session, `
+      (() => {
+        const languageSwitch = document.querySelector('#language-switch');
+        return document.documentElement.lang === 'en'
+          && languageSwitch?.value === 'en'
+          && window.localStorage.getItem('locale') === 'en'
+          && [...document.querySelectorAll('button')].some(button => button.textContent?.trim() === 'Help');
+      })()
+    `, 'english locale after switching');
+
+    await session.send('Page.reload', { ignoreCache: true });
+    await waitForUiReady(session);
+    await waitForExpression(session, `
+      (() => {
+        const languageSwitch = document.querySelector('#language-switch');
+        return document.documentElement.lang === 'en'
+          && languageSwitch?.value === 'en'
+          && window.localStorage.getItem('locale') === 'en'
+          && [...document.querySelectorAll('button')].some(button => button.textContent?.trim() === 'Help');
+      })()
+    `, 'english locale after reload');
+    summary.englishLocalePersistedAfterReload = true;
+
     summary.finalSnapshot = await session.evaluate(`
       (() => ({
         currentTitle: document.querySelector('header h1')?.textContent?.trim() || null,
         newConversationDraft: window.localStorage.getItem('newConversationDraft'),
+        locale: window.localStorage.getItem('locale'),
       }))()
     `);
   } catch (error) {

@@ -1,9 +1,13 @@
-import type { Metadata } from "next";
-import "./globals.css";
+import type { Metadata } from 'next';
+import './globals.css';
+import { getBootstrapScript } from '@/i18n/browser';
+import { getMessage } from '@/i18n/catalog';
+import { LanguageProvider } from '@/i18n/LanguageProvider';
+import { DEFAULT_LOCALE } from '@/i18n/types';
 
 export const metadata: Metadata = {
-  title: "AI 智能助手",
-  description: "AI 对话框应用",
+  title: getMessage(DEFAULT_LOCALE, 'app.title'),
+  description: getMessage(DEFAULT_LOCALE, 'app.description'),
 };
 
 export default function RootLayout({
@@ -13,10 +17,16 @@ export default function RootLayout({
 }>) {
   return (
     <html
-      lang="en"
+      lang={DEFAULT_LOCALE}
+      suppressHydrationWarning
       className="h-full antialiased"
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: getBootstrapScript() }} />
+      </head>
+      <body className="min-h-full flex flex-col">
+        <LanguageProvider>{children}</LanguageProvider>
+      </body>
     </html>
   );
 }

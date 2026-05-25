@@ -7,8 +7,9 @@ export const BACKUP_FILE_INPUT_SELECTOR = 'input[type="file"][accept*="applicati
 
 const DEFAULT_READY_EXPRESSION = `
   document.readyState === 'complete'
-    && Boolean(document.querySelector('button[aria-label="About"]'))
-    && Boolean(document.querySelector('textarea[aria-label="Chat message draft"]'))
+    && Boolean(document.querySelector('header h1'))
+    && Boolean(document.querySelector('#language-switch'))
+    && Boolean(document.querySelector('textarea[aria-label="Chat message draft"], textarea[aria-label="聊天消息草稿"]'))
     && Boolean(document.querySelector('input[type="file"]'))
 `;
 

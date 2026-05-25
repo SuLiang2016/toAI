@@ -24,6 +24,7 @@ function createBackupEnvelope(overrides = {}) {
         },
       ],
       activeConversationId: 'conv-1',
+      locale: 'en',
       conversationDrafts: {
         'conv-1': 'draft text',
       },
@@ -79,6 +80,7 @@ function seedCurrentAppState(windowMock) {
     },
   ]));
   windowMock.localStorage.setItem(storage.ACTIVE_CONVERSATION_KEY, 'old-conv');
+  windowMock.localStorage.setItem(storage.LOCALE_PREFERENCE_KEY, 'en');
   windowMock.localStorage.setItem(storage.CONVERSATION_DRAFTS_KEY, JSON.stringify({ 'old-conv': 'old draft' }));
   windowMock.localStorage.setItem(storage.NEW_CONVERSATION_DRAFT_KEY, 'old new draft');
   windowMock.localStorage.setItem(storage.PROMPT_TEMPLATES_KEY, JSON.stringify([
@@ -271,6 +273,26 @@ test('validateProviderSettings rejects non-http URLs and multiline model names',
   assert.equal(multilineModel.ok, false);
 });
 
+test('saveStoredLocale syncs localStorage and cookie while loadStoredLocale respects the stored value', () => {
+  const windowMock = installWindowMock();
+
+  try {
+    assert.equal(storage.loadStoredLocale(), 'zh-CN');
+
+    storage.saveStoredLocale('en');
+    assert.equal(storage.loadStoredLocale(), 'en');
+    assert.equal(windowMock.localStorage.getItem(storage.LOCALE_PREFERENCE_KEY), 'en');
+    assert.equal(windowMock.cookies()['ai-chat-locale'], 'en');
+
+    storage.saveStoredLocale(null);
+    assert.equal(storage.loadStoredLocale(), 'zh-CN');
+    assert.equal(windowMock.localStorage.getItem(storage.LOCALE_PREFERENCE_KEY), null);
+    assert.equal(windowMock.cookies()['ai-chat-locale'], undefined);
+  } finally {
+    windowMock.restore();
+  }
+});
+
 test('createProviderSnapshot defaults missing provider data without secrets', () => {
   const snapshot = storage.createProviderSnapshot();
 
@@ -299,6 +321,7 @@ test('exportAppBackup returns a deterministic versioned envelope for app-owned l
     assert.deepEqual(Object.keys(firstBackup.localStorage), [
       'conversations',
       'activeConversationId',
+      'locale',
       'conversationDrafts',
       'newConversationDraft',
       'promptTemplates',
@@ -307,6 +330,7 @@ test('exportAppBackup returns a deterministic versioned envelope for app-owned l
       'legacyProviderSettings',
     ]);
     assert.equal(firstBackup.localStorage.activeConversationId, 'old-conv');
+    assert.equal(firstBackup.localStorage.locale, 'en');
     assert.equal(firstBackup.localStorage.activeProviderPresetId, 'old-preset');
     assert.equal(firstBackup.localStorage.legacyProviderSettings.model, 'old-legacy');
     assert.equal('window-state' in firstBackup.localStorage, false);
@@ -362,6 +386,8 @@ test('restoreAppBackup replaces app-owned state and leaves unrelated keys untouc
       }))
     );
     assert.equal(windowMock.localStorage.getItem(storage.ACTIVE_CONVERSATION_KEY), 'conv-1');
+    assert.equal(windowMock.localStorage.getItem(storage.LOCALE_PREFERENCE_KEY), 'en');
+    assert.equal(windowMock.cookies()['ai-chat-locale'], 'en');
     assert.equal(windowMock.localStorage.getItem(storage.CONVERSATION_DRAFTS_KEY), null);
     assert.equal(windowMock.localStorage.getItem(storage.NEW_CONVERSATION_DRAFT_KEY), null);
     assert.deepEqual(

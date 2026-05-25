@@ -1,7 +1,8 @@
-'use client';
+﻿'use client';
 
 /* eslint-disable @next/next/no-img-element */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslate } from '@/i18n';
 import FileUpload from './FileUpload';
 import type { PromptTemplate, ProviderCapabilities } from '@/types/chat';
 
@@ -28,6 +29,7 @@ interface SlashRange {
 }
 
 export default function InputArea({ value, onChange, onSend, onStop, isLoading, templates, providerCapabilities }: InputAreaProps) {
+  const t = useTranslate();
   const [selectedFiles, setSelectedFiles] = useState<SelectedAttachment[]>([]);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [slashRange, setSlashRange] = useState<SlashRange | null>(null);
@@ -159,12 +161,12 @@ export default function InputArea({ value, onChange, onSend, onStop, isLoading, 
     for (const file of files) {
       if (file.type.startsWith('image/')) {
         if (!providerCapabilities.supportsAttachments || !providerCapabilities.supportsImages) {
-          setAttachmentError('Image attachments are disabled for the active provider.');
+          setAttachmentError(t('input.imageAttachmentsDisabled'));
           continue;
         }
 
         if (file.size > providerCapabilities.maxImageAttachmentBytes) {
-          setAttachmentError(`Image attachments must be ${formatBytes(providerCapabilities.maxImageAttachmentBytes)} or smaller.`);
+          setAttachmentError(t('input.imageSizeLimit', { size: formatBytes(providerCapabilities.maxImageAttachmentBytes) }));
           continue;
         }
 
@@ -177,15 +179,15 @@ export default function InputArea({ value, onChange, onSend, onStop, isLoading, 
 
       if (isPlainTextFile(file)) {
         if (file.size > providerCapabilities.maxTextFileBytes) {
-          setAttachmentError(`Text files must be ${formatBytes(providerCapabilities.maxTextFileBytes)} or smaller.`);
+          setAttachmentError(t('input.textSizeLimit', { size: formatBytes(providerCapabilities.maxTextFileBytes) }));
           continue;
         }
 
-        textSnippets.push(await readTextFile(file));
+        textSnippets.push(await readTextFile(file, t('input.filePrefix')));
         continue;
       }
 
-      setAttachmentError('Unsupported file type. Attach images or plain text files only.');
+      setAttachmentError(t('input.unsupportedFileType'));
     }
 
     if (nextImageAttachments.length > 0) {
@@ -266,10 +268,10 @@ export default function InputArea({ value, onChange, onSend, onStop, isLoading, 
                   <button
                     onClick={() => removeFile(index)}
                     className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-xs text-white opacity-0 transition-opacity group-hover:opacity-100"
-                    aria-label={`Remove attachment ${file.name}`}
+                    aria-label={t('input.removeAttachment', { name: file.name })}
                     type="button"
                   >
-                    x
+                    ×
                   </button>
                 </div>
               ) : (
@@ -286,10 +288,10 @@ export default function InputArea({ value, onChange, onSend, onStop, isLoading, 
                   <button
                     onClick={() => removeFile(index)}
                     className="text-gray-400 hover:text-gray-600"
-                    aria-label={`Remove attachment ${file.name}`}
+                    aria-label={t('input.removeAttachment', { name: file.name })}
                     type="button"
                   >
-                    x
+                    ×
                   </button>
                 </div>
               )}
@@ -309,10 +311,10 @@ export default function InputArea({ value, onChange, onSend, onStop, isLoading, 
           onFilesSelected={handleFilesSelected}
           accept="image/*,.pdf,.doc,.docx,.txt"
           multiple
-          title={providerCapabilities.supportsAttachments ? 'Upload file' : 'Images disabled; text files still import'}
+          title={providerCapabilities.supportsAttachments ? t('input.uploadFile') : t('input.imagesDisabledTextFilesAvailable')}
         />
         {!providerCapabilities.supportsAttachments && (
-          <span className="mb-2 text-xs text-gray-400">Images disabled; .txt import available</span>
+          <span className="mb-2 text-xs text-gray-400">{t('input.imagesDisabledTextFilesAvailable')}</span>
         )}
 
         <div className="relative flex-1">
@@ -336,7 +338,7 @@ export default function InputArea({ value, onChange, onSend, onStop, isLoading, 
                   </button>
                 ))
               ) : (
-                <div className="px-3 py-2 text-sm text-gray-500">No matching templates</div>
+                <div className="px-3 py-2 text-sm text-gray-500">{t('input.noMatchingTemplates')}</div>
               )}
             </div>
           )}
@@ -348,8 +350,8 @@ export default function InputArea({ value, onChange, onSend, onStop, isLoading, 
             onKeyDown={handleKeyDown}
             onClick={handleSelectionChange}
             onKeyUp={handleKeyUp}
-            placeholder="Type a message... (Shift+Enter for newline)"
-            aria-label="Chat message draft"
+            placeholder={t('input.placeholder')}
+            aria-label={t('input.draftAriaLabel')}
             className="max-h-32 min-h-[44px] w-full resize-none rounded-xl border border-gray-300 px-4 py-2 pr-12 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
             rows={1}
             disabled={isLoading}
@@ -360,8 +362,8 @@ export default function InputArea({ value, onChange, onSend, onStop, isLoading, 
           <button
             onClick={onStop}
             className="rounded-xl bg-red-500 px-4 py-2 text-white transition-colors hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-50"
-            title="Stop generation"
-            aria-label="Stop generation"
+            title={t('input.stopGeneration')}
+            aria-label={t('input.stopGeneration')}
             type="button"
           >
             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -374,8 +376,8 @@ export default function InputArea({ value, onChange, onSend, onStop, isLoading, 
             onClick={() => void handleSend()}
             disabled={!value.trim() && selectedFiles.length === 0}
             className="rounded-xl bg-blue-500 px-4 py-2 text-white transition-colors hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
-            title="Send message"
-            aria-label="Send message"
+            title={t('input.sendMessage')}
+            aria-label={t('input.sendMessage')}
             type="button"
           >
             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -386,9 +388,9 @@ export default function InputArea({ value, onChange, onSend, onStop, isLoading, 
       </div>
 
       <div className="mt-2 flex flex-wrap gap-3 text-[11px] text-gray-400">
-        <span>{providerCapabilities.streaming ? 'Streaming on' : 'Streaming off'}</span>
-        <span>Image limit {formatBytes(providerCapabilities.maxImageAttachmentBytes)}</span>
-        <span>Text limit {formatBytes(providerCapabilities.maxTextFileBytes)}</span>
+        <span>{providerCapabilities.streaming ? t('input.streamingOn') : t('input.streamingOff')}</span>
+        <span>{t('input.imageLimit', { size: formatBytes(providerCapabilities.maxImageAttachmentBytes) })}</span>
+        <span>{t('input.textLimit', { size: formatBytes(providerCapabilities.maxTextFileBytes) })}</span>
       </div>
     </div>
   );
@@ -409,8 +411,8 @@ function isPlainTextFile(file: File): boolean {
   return file.type === 'text/plain' || file.name.toLowerCase().endsWith('.txt');
 }
 
-function readTextFile(file: File): Promise<string> {
-  return file.text().then(text => `File: ${file.name}\n\n${text}`);
+function readTextFile(file: File, prefix: string): Promise<string> {
+  return file.text().then(text => `${prefix}: ${file.name}\n\n${text}`);
 }
 
 function formatBytes(bytes: number): string {

@@ -99,4 +99,7 @@ export interface PromptTemplate {
 export interface ChatRequest {
   messages: ChatRequestMessage[];
   settings?: ProviderSettings;
+  locale?: AppLocale;
 }
+
+export type AppLocale = 'zh-CN' | 'en';

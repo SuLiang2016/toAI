@@ -1,10 +1,12 @@
 {
-  "ranAt": "2026-05-24T13:21:58.517Z",
+  "ranAt": "2026-05-25T07:54:36.276Z",
   "outputPath": "C:\\suliang\\toAI\\ai-chat\\output\\playwright\\packaged-desktop-smoke-2026-05-24.json",
   "backupJsonPath": "C:\\suliang\\toAI\\ai-chat\\output\\playwright\\packaged-desktop-backup-2026-05-24.json",
   "unpackedExecutable": "C:\\suliang\\toAI\\ai-chat\\dist\\win-unpacked\\AI Chat.exe",
-  "originalUserDataPresent": true,
-  "userDataBackupPath": "C:\\Users\\admin\\AppData\\Roaming\\ai-chat.batch2-backup-1779628918518",
+  "appDataRoot": "C:\\suliang\\toAI\\ai-chat\\output\\playwright\\appdata",
+  "launchMode": "source-electron-fallback",
+  "originalUserDataPresent": false,
+  "userDataBackupPath": null,
   "aboutDetails": {
     "versionLine": "Version: 1.0.1Platform: win32Conversation store: localStorageLong-term storage strategy: keep localStorage canonical until a desktop-owned store is justifiedBackup restore mode: replace-onlyLog path: C:\\Users\\admin\\AppData\\Roaming\\ai-chat\\logs\\main.logStartup: ok",
     "platformLine": "Platform: win32",
@@ -12,10 +14,12 @@
     "startupLine": "Startup: ok"
   },
   "logExportStatus": "Exported sanitized logs: C:\\Users\\admin\\AppData\\Roaming\\ai-chat\\sanitized-main.log",
-  "backupExportStatus": "Exported backup created at 2026-05-24T13:22:01.891Z.",
+  "backupExportStatus": "Exported backup created at 2026-05-25T07:55:42.405Z.",
   "restoreStatus": null,
   "backupFileExists": true,
   "sanitizedLogPath": "C:\\Users\\admin\\AppData\\Roaming\\ai-chat\\sanitized-main.log",
   "restoreVerified": true,
-  "restoredOriginalUserData": true
+  "localeVerified": true,
+  "restoredOriginalUserData": false,
+  "packagedLaunchError": "Timed out waiting for page debugger target on port 9442"
 }

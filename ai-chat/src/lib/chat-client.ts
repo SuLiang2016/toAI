@@ -33,7 +33,7 @@ export async function prepareAttachments(files?: File[]) {
   );
 }
 
-export async function readErrorResponse(response: Response): Promise<string> {
+export async function readErrorResponse(response: Response, fallbackMessage: string): Promise<string> {
   try {
     const body = await response.json();
     if (typeof body?.error === 'string') {
@@ -43,7 +43,7 @@ export async function readErrorResponse(response: Response): Promise<string> {
     // Fall through to status text.
   }
 
-  return `AI request failed with HTTP status ${response.status}`;
+  return fallbackMessage;
 }
 
 export function sanitizeClientError(message: string): string {

@@ -62,10 +62,14 @@ assert.deepEqual(
 assert.ok(existsSync('src/lib/streaming.ts'), 'pure streaming parser module must exist');
 assert.ok(existsSync('src/lib/storage.ts'), 'storage schema/migration helper module must exist');
 assert.ok(existsSync('src/lib/chat-client.ts'), 'chat client helper module must exist');
+assert.ok(existsSync('src/i18n/catalog.ts'), 'i18n catalog module must exist');
+assert.ok(existsSync('src/i18n/messages/en.ts'), 'English message catalog must exist');
+assert.ok(existsSync('src/i18n/messages/zh-CN.ts'), 'zh-CN message catalog must exist');
 assert.ok(existsSync('src/app/api/provider/check/route.ts'), 'provider connectivity check route must exist');
 assert.ok(existsSync('scripts/run-behavior-tests.mjs'), 'behavior test runner must exist');
 assert.ok(existsSync('scripts/smoke-helpers.mjs'), 'shared smoke automation helpers must exist');
 assert.ok(existsSync('scripts/streaming.behavior.test.mjs'), 'streaming behavior tests must exist');
+assert.ok(existsSync('scripts/i18n.behavior.test.mjs'), 'i18n behavior tests must exist');
 assert.ok(existsSync('scripts/storage.behavior.test.mjs'), 'storage behavior tests must exist');
 assert.ok(existsSync('scripts/provider-config.behavior.test.mjs'), 'provider config behavior tests must exist');
 assert.ok(existsSync('scripts/browser-workspace-smoke.mjs'), 'browser workspace smoke script must exist');
@@ -96,7 +100,10 @@ assert.match(storage, /CONVERSATIONS_KEY = 'conversations'/, 'storage helpers mu
 assert.match(storage, /CONVERSATION_DRAFTS_KEY = 'conversationDrafts'/, 'storage helpers must own drafts key');
 assert.match(storage, /PROMPT_TEMPLATES_KEY = 'promptTemplates'/, 'storage helpers must own template key');
 assert.match(storage, /PROVIDER_PRESETS_KEY = 'providerPresets'/, 'storage helpers must own provider preset key');
+assert.match(storage, /LOCALE_PREFERENCE_KEY = LOCALE_STORAGE_KEY/, 'storage helpers must own locale preference key');
 assert.match(storage, /loadStoredConversations/, 'storage helpers must load conversations');
+assert.match(storage, /loadStoredLocale/, 'storage helpers must load persisted locale');
+assert.match(storage, /saveStoredLocale/, 'storage helpers must save persisted locale');
 assert.match(storage, /BACKUP_FORMAT_VERSION = 1/, 'storage helpers must declare backup format version');
 assert.match(storage, /exportAppBackup/, 'storage helpers must export a versioned app backup');
 assert.match(storage, /parseAppBackupJson/, 'storage helpers must parse backup JSON');
@@ -134,7 +141,7 @@ assert.match(chatClient, /\[local path\]/, 'chat client helpers must mask local 
 
 const providerConfig = text('src/server/ai/config.ts');
 assert.match(providerConfig, /validateProviderSettings/, 'provider config must validate settings server-side');
-assert.match(providerConfig, /Missing API key/, 'provider config must report missing API key setup');
+assert.match(providerConfig, /provider\.missingApiKey/, 'provider config must report missing API key setup');
 assert.match(providerConfig, /sanitizeProviderMessage/, 'provider config must sanitize upstream errors');
 assert.match(providerConfig, /\[local path\]/, 'provider config must mask local paths');
 assert.match(providerConfig, /api\[_-\]\?key\|token\|secret\|password/, 'provider config must mask secret field names');
@@ -163,7 +170,7 @@ const inputArea = text('src/components/InputArea.tsx');
 assert.match(inputArea, /value: string/, 'InputArea must accept controlled text value');
 assert.match(inputArea, /templates: PromptTemplate\[\]/, 'InputArea must accept prompt templates');
 assert.match(inputArea, /providerCapabilities: ProviderCapabilities/, 'InputArea must receive active provider capabilities');
-assert.match(inputArea, /Image attachments are disabled for the active provider/, 'InputArea must block unsupported image attachments clearly');
+assert.match(inputArea, /input\.imageAttachmentsDisabled/, 'InputArea must block unsupported image attachments clearly');
 assert.match(inputArea, /event\.ctrlKey/, 'InputArea must handle Ctrl+Enter send shortcut');
 assert.match(inputArea, /event\.metaKey/, 'InputArea must handle Meta+Enter send shortcut');
 assert.match(inputArea, /event\.nativeEvent\.isComposing/, 'InputArea must not submit while IME composition is active');
@@ -171,7 +178,7 @@ assert.match(inputArea, /event\.key === 'Escape' && isLoading/, 'InputArea must 
 assert.match(inputArea, /URL\.revokeObjectURL/, 'InputArea must release image preview object URLs');
 assert.match(inputArea, /slashRange/, 'InputArea must track slash command ranges');
 assert.match(inputArea, /ArrowDown/, 'InputArea must support template picker keyboard navigation');
-assert.match(inputArea, /Streaming on/, 'InputArea must show streaming capability hint');
+assert.match(inputArea, /input\.streamingOn/, 'InputArea must show streaming capability hint');
 
 const chatBox = text('src/components/ChatBox.tsx');
 assert.match(chatBox, /ChatSidebar/, 'ChatBox must compose an extracted sidebar surface');
@@ -187,7 +194,8 @@ assert.match(chatBox, /toggleConversationPinned/, 'ChatBox must support conversa
 assert.match(chatBox, /toggleConversationArchived/, 'ChatBox must support conversation archiving');
 assert.match(chatBox, /pruneConversationDrafts/, 'ChatBox must expose stale draft cleanup');
 assert.match(chatBox, /handleConversationKeyDown/, 'ChatBox must support keyboard navigation in conversation list');
-assert.match(chatBox, /Provider: \{currentProviderLabel\} \| \{currentProviderStatusLabel\}/, 'ChatBox must show active provider status without secrets');
+assert.match(chatBox, /chat\.providerSummary/, 'ChatBox must show active provider status without secrets');
+assert.match(chatBox, /language-switch/, 'ChatBox must expose an in-app language switch');
 assert.match(chatBox, /event\.key\.toLowerCase\(\) === 'k'/, 'ChatBox must support Ctrl/Cmd+K search shortcut');
 assert.match(chatBox, /event\.key\.toLowerCase\(\) === 'n'/, 'ChatBox must support Alt+N new-chat shortcut');
 assert.match(chatBox, /\/api\/provider\/check/, 'ChatBox must call provider connectivity check');
@@ -219,22 +227,22 @@ assert.match(messageBubble, /onCopyCode\(code\)/, 'MessageBubble must expose cod
 assert.match(messageBubble, /onEditResend\(message\)/, 'MessageBubble must expose edit-resend action');
 
 const aboutModal = text('src/components/chatbox/AboutModal.tsx');
-assert.match(aboutModal, /Export backup/, 'About modal must expose backup export');
-assert.match(aboutModal, /Restore backup/, 'About modal must expose backup restore');
-assert.match(aboutModal, /replace-only/, 'About modal must describe replace-only restore semantics');
-assert.match(aboutModal, /Invalid backups do not change current data/, 'About modal must describe zero-mutation invalid backup behavior');
-assert.match(aboutModal, /Long-term storage strategy/, 'About modal must explain the current storage strategy');
+assert.match(aboutModal, /about\.exportBackup/, 'About modal must expose backup export');
+assert.match(aboutModal, /about\.restoreBackup/, 'About modal must expose backup restore');
+assert.match(aboutModal, /about\.backupRestoreMode/, 'About modal must describe replace-only restore semantics');
+assert.match(aboutModal, /about\.restoreWarning/, 'About modal must describe zero-mutation invalid backup behavior');
+assert.match(aboutModal, /about\.storageStrategy/, 'About modal must explain the current storage strategy');
 
 const providerModal = text('src/components/chatbox/ProviderPresetsModal.tsx');
-assert.match(providerModal, /Max image bytes/, 'provider modal must expose image byte limits');
-assert.match(providerModal, /Max text file bytes/, 'provider modal must expose text byte limits');
-assert.match(providerModal, /last connectivity result/, 'provider modal must explain stored reachability metadata');
+assert.match(providerModal, /provider\.maxImageBytes/, 'provider modal must expose image byte limits');
+assert.match(providerModal, /provider\.maxTextFileBytes/, 'provider modal must expose text byte limits');
+assert.match(providerModal, /provider\.apiKeysHint/, 'provider modal must explain stored reachability metadata');
 
 const sidebar = text('src/components/chatbox/ChatSidebar.tsx');
-assert.match(sidebar, /Archived \(/, 'sidebar must expose archived conversation view');
-assert.match(sidebar, /Ctrl\/Cmd\+K search/, 'sidebar must document keyboard search shortcut');
-assert.match(sidebar, /Pin conversation/, 'sidebar must expose conversation pinning');
-assert.match(sidebar, /Archive conversation/, 'sidebar must expose conversation archiving');
+assert.match(sidebar, /sidebar\.archivedCount/, 'sidebar must expose archived conversation view');
+assert.match(sidebar, /sidebar\.keyboardHint/, 'sidebar must document keyboard search shortcut');
+assert.match(sidebar, /sidebar\.pinConversation/, 'sidebar must expose conversation pinning');
+assert.match(sidebar, /sidebar\.archiveConversation/, 'sidebar must expose conversation archiving');
 
 const electronMain = text('electron/main.js');
 assert.match(electronMain, /nodeIntegration:\s*false/, 'Electron must keep nodeIntegration disabled');

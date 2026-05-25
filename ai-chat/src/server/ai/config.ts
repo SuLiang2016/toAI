@@ -1,5 +1,6 @@
+import { getMessage } from '@/i18n';
 import { normalizeProviderCapabilities, normalizeProviderSettings, validateProviderSettings } from '@/lib/storage';
-import type { ProviderCapabilities, ProviderSettings } from '@/types/chat';
+import type { AppLocale, ProviderCapabilities, ProviderSettings } from '@/types/chat';
 
 export interface ProviderConfig {
   apiKey: string;
@@ -19,16 +20,16 @@ export class ProviderError extends Error {
   }
 }
 
-export function getProviderConfig(settings?: ProviderSettings): ProviderConfig {
+export function getProviderConfig(settings?: ProviderSettings, locale: AppLocale = 'en'): ProviderConfig {
   const apiKey = process.env.AI_API_KEY || process.env.OPENAI_API_KEY;
 
   if (!apiKey) {
-    throw new ProviderError('Missing API key. Set AI_API_KEY in .env.local.', 500);
+    throw new ProviderError(getMessage(locale, 'provider.missingApiKey'), 500);
   }
 
-  const validated = validateProviderSettings(settings);
+  const validated = validateProviderSettings(settings, locale);
   if (!validated.ok) {
-    throw new ProviderError(validated.message || 'Provider settings are invalid.', 400);
+    throw new ProviderError(validated.message || getMessage(locale, 'provider.settingsInvalid'), 400);
   }
 
   const normalized = normalizeProviderSettings(validated.settings);
@@ -38,7 +39,7 @@ export function getProviderConfig(settings?: ProviderSettings): ProviderConfig {
 
   return {
     apiKey,
-    baseUrl: normalizeBaseUrl(normalized.baseUrl || process.env.AI_API_BASE_URL || 'https://api.openai.com/v1'),
+    baseUrl: normalizeBaseUrl(normalized.baseUrl || process.env.AI_API_BASE_URL || 'https://api.openai.com/v1', locale),
     model: normalized.model || process.env.AI_MODEL || 'gpt-3.5-turbo',
     supportsAttachments,
     capabilities: {
@@ -49,11 +50,11 @@ export function getProviderConfig(settings?: ProviderSettings): ProviderConfig {
   };
 }
 
-function normalizeBaseUrl(baseUrl: string): string {
+function normalizeBaseUrl(baseUrl: string, locale: AppLocale): string {
   const trimmed = baseUrl.trim().replace(/\/+$/, '');
 
   if (!trimmed) {
-    throw new ProviderError('AI_API_BASE_URL cannot be empty', 400);
+    throw new ProviderError(getMessage(locale, 'provider.baseUrlEmpty'), 400);
   }
 
   try {
@@ -63,13 +64,13 @@ function normalizeBaseUrl(baseUrl: string): string {
     }
     return url.toString().replace(/\/+$/, '');
   } catch {
-    throw new ProviderError('AI_API_BASE_URL must be a valid HTTP URL', 400);
+    throw new ProviderError(getMessage(locale, 'provider.baseUrlInvalid'), 400);
   }
 }
 
-export function sanitizeProviderMessage(message: unknown): string {
+export function sanitizeProviderMessage(message: unknown, locale: AppLocale = 'en'): string {
   if (typeof message !== 'string' || !message.trim()) {
-    return 'AI service request failed';
+    return getMessage(locale, 'provider.serviceRequestFailed');
   }
 
   return message

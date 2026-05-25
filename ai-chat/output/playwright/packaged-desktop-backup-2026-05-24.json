@@ -1,7 +1,7 @@
 {
   "backupFormatVersion": 1,
   "storageSchemaVersion": 2,
-  "createdAt": "2026-05-24T13:22:01.891Z",
+  "createdAt": "2026-05-25T07:55:42.405Z",
   "localStorage": {
     "conversations": [
       {
@@ -12,19 +12,19 @@
             "id": "packaged-smoke-user-1",
             "role": "user",
             "content": "Preserve this packaged smoke backup state",
-            "timestamp": 1779628909517,
+            "timestamp": 1779695667276,
             "status": "complete"
           },
           {
             "id": "packaged-smoke-assistant-1",
             "role": "assistant",
             "content": "Packaged desktop smoke state seeded",
-            "timestamp": 1779628910517,
+            "timestamp": 1779695668276,
             "status": "complete"
           }
         ],
-        "createdAt": 1779628908517,
-        "updatedAt": 1779628920908,
+        "createdAt": 1779695666276,
+        "updatedAt": 1779695741544,
         "provider": {
           "id": "packaged-smoke-provider-1",
           "name": "Packaged Smoke Provider",
@@ -37,12 +37,13 @@
             "maxTextFileBytes": 262144,
             "streaming": true
           },
-          "checkedAt": 1779628898517,
+          "checkedAt": 1779695656276,
           "status": "reachable"
         }
       }
     ],
     "activeConversationId": "packaged-smoke-conversation-1",
+    "locale": "en",
     "conversationDrafts": {
       "packaged-smoke-conversation-1": "packaged draft survives restore"
     },
@@ -52,8 +53,8 @@
         "id": "packaged-template-1",
         "title": "Packaged smoke template",
         "content": "Keep packaged smoke stable.",
-        "createdAt": 1779628911517,
-        "updatedAt": 1779628911517
+        "createdAt": 1779695669276,
+        "updatedAt": 1779695669276
       }
     ],
     "providerPresets": [
@@ -70,9 +71,9 @@
           "maxTextFileBytes": 262144,
           "streaming": true
         },
-        "createdAt": 1779628912517,
-        "updatedAt": 1779628912517,
-        "lastCheckedAt": 1779628913517,
+        "createdAt": 1779695670276,
+        "updatedAt": 1779695670276,
+        "lastCheckedAt": 1779695671276,
         "lastCheckStatus": "reachable"
       }
     ],
