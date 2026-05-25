@@ -13,6 +13,14 @@ pnpm test
 pnpm build
 pnpm electron-build
 pnpm electron-installer
+pnpm smoke:browser
+pnpm smoke:packaged
+```
+
+Preferred wrapper:
+
+```powershell
+pnpm verify:release
 ```
 
 Record each run with the release evidence template in `docs/RELEASE_EVIDENCE_TEMPLATE.md`, and classify each item as `already evidenced`, `freshly rerun`, or `deferred`.
@@ -20,18 +28,25 @@ Record each run with the release evidence template in `docs/RELEASE_EVIDENCE_TEM
 ## Gate States
 
 - `STATIC PASS`: `pnpm lint`, `pnpm typecheck`, `pnpm test`, and `pnpm build` passed.
+- `BROWSER SMOKE PASS`: `pnpm smoke:browser` validated browser workspace rename/search/archive/draft-reload flows against the current production app shell.
+- `PACKAGED SMOKE PASS`: `pnpm smoke:packaged` validated unpacked Electron startup, About, diagnostics, sanitized log export, and backup export/restore flows.
 - `UNPACKED SMOKE PASS`: `dist/win-unpacked/AI Chat.exe` launched and smoke checks passed.
 - `INSTALLER SMOKE PASS`: installer build and install/upgrade smoke passed.
 - `BLOCKED`: prerequisite is missing or owned elsewhere.
 - `DEFERRED`: intentionally out of scope for this lane.
 
-## Desktop Smoke
+## Smoke Contract
 
-- Launch `dist/win-unpacked/AI Chat.exe`.
-- Confirm the main window opens with `nodeIntegration: false` and `contextIsolation: true`.
-- Confirm About shows version/platform through the preload bridge.
-- Confirm sanitized log export/open works and does not expose API keys, bearer tokens, or local paths.
-- Confirm a missing or invalid provider setting produces a sanitized error.
+- `pnpm smoke:browser`
+- Covers seeded browser workspace state, rename, search, archive view, and new-chat draft persistence after reload.
+- Writes `output/playwright/browser-workspace-smoke-2026-05-24.json` by default.
+
+- `pnpm smoke:packaged`
+- Covers `dist/win-unpacked/AI Chat.exe` startup plus About, diagnostics, sanitized log export, backup export, and backup restore.
+- Writes `output/playwright/packaged-desktop-smoke-2026-05-24.json` and `output/playwright/packaged-desktop-backup-2026-05-24.json` by default.
+
+- Historical installer install/upgrade evidence remains separate.
+- Keep `output/playwright/installer-upgrade-smoke-2026-05-24.json` and `output/playwright/installer-upgrade-backup-2026-05-24.json` as the dated Batch 1 proof for the real `1.0.0 -> 1.0.1` installer path.
 
 ## Signing
 
@@ -45,6 +60,7 @@ Record each run with the release evidence template in `docs/RELEASE_EVIDENCE_TEM
 - Auto-update remains deferred.
 - Before enabling updates, define stable, beta, and rollback channels.
 - Record where release metadata is hosted and how failed rollouts are disabled.
+- Use `docs/PUBLIC_DISTRIBUTION_OWNERSHIP.md` as the source-controlled owner and metadata-hosting contract.
 - Public update rollout is `DEFERRED` until channels and rollback metadata exist.
 
 ## Rollback

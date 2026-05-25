@@ -337,7 +337,7 @@ Fresh verification results:
 - `pnpm test`: passed with 28 behavior tests plus `upgrade verification checks passed`.
 - `pnpm build`: passed; routes include `/`, `/api/chat`, and `/api/provider/check`.
 - `pnpm electron-build`: passed; `dist/win-unpacked/AI Chat.exe` was produced.
-- `pnpm electron-installer`: passed; `dist/AI Chat Setup 1.0.0.exe` and `.blockmap` were produced.
+- `pnpm electron-installer`: passed; `dist/AI Chat Setup 1.0.1.exe` and `.blockmap` were produced.
 
 Smoke evidence:
 
@@ -369,13 +369,15 @@ Fresh verification results:
 - `pnpm lint`: passed.
 - `pnpm typecheck`: passed.
 - `pnpm build`: passed; routes include `/`, `/api/chat`, and `/api/provider/check`.
-- `pnpm electron-installer`: passed; packaging refreshed `dist/win-unpacked/AI Chat.exe`, `dist/AI Chat Setup 1.0.0.exe`, and `dist/AI Chat Setup 1.0.0.exe.blockmap`.
+- `pnpm electron-installer`: passed; packaging refreshed `dist/win-unpacked/AI Chat.exe`, `dist/AI Chat Setup 1.0.1.exe`, and `dist/AI Chat Setup 1.0.1.exe.blockmap`.
+- `pnpm smoke:browser`: passed; the browser workspace smoke contract now records rename/search/archive/draft-reload evidence in `output/playwright/browser-workspace-smoke-2026-05-24.json`.
+- `pnpm smoke:packaged`: passed; the packaged desktop smoke contract now records About/diagnostics/log-export/backup-restore evidence in `output/playwright/packaged-desktop-smoke-2026-05-24.json`.
+- `pnpm verify:release`: now sequences the standing static, packaging, and smoke gates in one repo-local wrapper.
 
 Known gaps after this batch:
 
-- Packaged About, backup export/restore, sanitized log actions, and packaged relaunch retention now all have fresh 2026-05-24 evidence artifacts.
+- Batch 1 real installer-version upgrade evidence and Batch 2 repeatable smoke-contract evidence now both exist and stay traceable to dated artifacts.
 - Provider connectivity still requires a valid local `AI_API_KEY` or `OPENAI_API_KEY` for a real end-to-end reachability proof.
-- Cross-version installer upgrade retention is still missing one real old-version to current-version installer path artifact.
 - Public distribution remains blocked until external ownership exists for signing, update metadata, rollback policy, and trust policy.
 
 ## ADR

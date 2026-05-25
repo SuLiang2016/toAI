@@ -1,0 +1,82 @@
+{
+  "backupFormatVersion": 1,
+  "storageSchemaVersion": 2,
+  "createdAt": "2026-05-24T13:22:01.891Z",
+  "localStorage": {
+    "conversations": [
+      {
+        "id": "packaged-smoke-conversation-1",
+        "title": "Packaged smoke seed conversation",
+        "messages": [
+          {
+            "id": "packaged-smoke-user-1",
+            "role": "user",
+            "content": "Preserve this packaged smoke backup state",
+            "timestamp": 1779628909517,
+            "status": "complete"
+          },
+          {
+            "id": "packaged-smoke-assistant-1",
+            "role": "assistant",
+            "content": "Packaged desktop smoke state seeded",
+            "timestamp": 1779628910517,
+            "status": "complete"
+          }
+        ],
+        "createdAt": 1779628908517,
+        "updatedAt": 1779628920908,
+        "provider": {
+          "id": "packaged-smoke-provider-1",
+          "name": "Packaged Smoke Provider",
+          "baseUrl": "https://api.openai.com/v1",
+          "model": "gpt-4.1-mini",
+          "capabilities": {
+            "supportsAttachments": true,
+            "supportsImages": true,
+            "maxImageAttachmentBytes": 5242880,
+            "maxTextFileBytes": 262144,
+            "streaming": true
+          },
+          "checkedAt": 1779628898517,
+          "status": "reachable"
+        }
+      }
+    ],
+    "activeConversationId": "packaged-smoke-conversation-1",
+    "conversationDrafts": {
+      "packaged-smoke-conversation-1": "packaged draft survives restore"
+    },
+    "newConversationDraft": "",
+    "promptTemplates": [
+      {
+        "id": "packaged-template-1",
+        "title": "Packaged smoke template",
+        "content": "Keep packaged smoke stable.",
+        "createdAt": 1779628911517,
+        "updatedAt": 1779628911517
+      }
+    ],
+    "providerPresets": [
+      {
+        "id": "packaged-smoke-provider-1",
+        "name": "Packaged Smoke Provider",
+        "baseUrl": "https://api.openai.com/v1",
+        "model": "gpt-4.1-mini",
+        "supportsAttachments": true,
+        "capabilities": {
+          "supportsAttachments": true,
+          "supportsImages": true,
+          "maxImageAttachmentBytes": 5242880,
+          "maxTextFileBytes": 262144,
+          "streaming": true
+        },
+        "createdAt": 1779628912517,
+        "updatedAt": 1779628912517,
+        "lastCheckedAt": 1779628913517,
+        "lastCheckStatus": "reachable"
+      }
+    ],
+    "activeProviderPresetId": "packaged-smoke-provider-1",
+    "legacyProviderSettings": null
+  }
+}

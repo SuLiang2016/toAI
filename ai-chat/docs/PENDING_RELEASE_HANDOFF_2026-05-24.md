@@ -3,7 +3,7 @@
 Date: 2026-05-24
 App version: `1.0.1`
 Release state: internal-only, blocked for public distribution
-Active lane: Batch 2 verification stack upgrade
+Active lane: public distribution ownership hold after Batch 2 verification stack upgrade
 
 This handoff captures the remaining work after the 2026-05-24 release-confidence refresh closed the real installer-version upgrade gap. It does not reopen the completed 2026-05-23 roadmap Phase 1-6 batch, and it does not treat already-rerun verification gates as pending.
 
@@ -11,7 +11,7 @@ This handoff captures the remaining work after the 2026-05-24 release-confidence
 
 - Treat the real installer-version upgrade lane as complete for `1.0.0 -> 1.0.1`.
 - Preserve the dated upgrade artifacts and migration proof as release evidence, not open work.
-- Move the next repo-local lane to Batch 2 verification stack upgrade.
+- Treat the Batch 2 verification stack upgrade as complete after the repeatable smoke commands were added to source control and rerun.
 - Keep public distribution explicitly blocked.
 - Treat `docs/RELEASE_RC_EVIDENCE_2026-05-23.md` as the dated source of truth for the latest evidence set.
 
@@ -46,8 +46,18 @@ The following evidence is already recorded and should stay closed unless a later
     - `output/playwright/installer-upgrade-smoke-2026-05-24.json`
     - `output/playwright/installer-upgrade-backup-2026-05-24.json`
   - Evidence record: `docs/RELEASE_RC_EVIDENCE_2026-05-23.md` Record 8
+- Browser workspace smoke contract:
+  - Artifact: `output/playwright/browser-workspace-smoke-2026-05-24.json`
+  - Evidence record: `docs/RELEASE_RC_EVIDENCE_2026-05-23.md` Record 9
+- Packaged desktop smoke contract:
+  - Artifacts:
+    - `output/playwright/packaged-desktop-smoke-2026-05-24.json`
+    - `output/playwright/packaged-desktop-backup-2026-05-24.json`
+  - Evidence record: `docs/RELEASE_RC_EVIDENCE_2026-05-23.md` Record 10
 - Verification command transcript:
   - Artifact: `output/playwright/verification-commands-2026-05-24.txt`
+- Source-controlled verification wrapper:
+  - Command: `pnpm verify:release`
 
 ## Active Blockers
 
@@ -62,6 +72,7 @@ The following evidence is already recorded and should stay closed unless a later
   - trust-policy owner
 - Current evidence:
   - `docs/RELEASE_RC_EVIDENCE_2026-05-23.md` Record 7
+  - `docs/PUBLIC_DISTRIBUTION_OWNERSHIP.md`
 - Current boundary:
   - repo-local packaging, startup, relaunch retention, historical compatibility, and real installer-version upgrade evidence are complete
   - public release readiness is not complete
@@ -71,25 +82,15 @@ The following evidence is already recorded and should stay closed unless a later
 
 ## Remaining Work
 
-### 1. Batch 2 verification stack upgrade
-
-- Goal:
-  - replace the current partly-manual release confidence model with documented browser and packaged/Electron smoke commands
-- Validate:
-  - browser workspace flows
-  - packaged startup, About, diagnostics, and backup actions
-  - integration of the new smoke lane into the repo verification contract
-- Done when:
-  - the new smoke commands are documented in source control and no longer depend on reconstructing operator steps
-
-### 2. Public distribution ownership
+### 1. Public distribution ownership
 
 - Keep blocked until:
-  - signing, update metadata hosting, rollback ownership, and trust-policy ownership are explicitly assigned
+  - signing certificate ownership, timestamp authority ownership, update metadata hosting, rollback ownership, and trust-policy ownership are explicitly assigned
+  - `docs/PUBLIC_DISTRIBUTION_OWNERSHIP.md` no longer contains `TBD` owners for blocker items 1-5
 
 ## Resume Commands
 
-Use the existing verification contract when the next lane is ready for revalidation:
+Use the standing verification contract when the next lane is ready for revalidation:
 
 ```powershell
 pnpm lint
@@ -98,18 +99,30 @@ pnpm test
 pnpm build
 pnpm electron-build
 pnpm electron-installer
+pnpm smoke:browser
+pnpm smoke:packaged
 ```
 
-Batch 1 installer-version upgrade evidence is already recorded in `output/playwright/installer-upgrade-smoke-2026-05-24.json`; the next repo-local lane should build the repeatable verification contract around it.
+Preferred wrapper:
+
+```powershell
+pnpm verify:release
+```
+
+Batch 1 installer-version upgrade evidence is already recorded in `output/playwright/installer-upgrade-smoke-2026-05-24.json`; Batch 2 now preserves the repeatable verification contract around it.
 
 ## Handoff Sources
 
 - Release evidence: `docs/RELEASE_RC_EVIDENCE_2026-05-23.md`
+- Public-distribution owner contract: `docs/PUBLIC_DISTRIBUTION_OWNERSHIP.md`
 - Active lane plan: `docs/NEXT_EXECUTION_PLAN.md`
 - Batch plan: `.omx/plans/prd-batched-upgrade-plan-2026-05-24.md`
 - Same-version install/reinstall baseline: `docs/RELEASE_RC_EVIDENCE_2026-05-20.md`
 - Real installer upgrade artifact: `output/playwright/installer-upgrade-smoke-2026-05-24.json`
 - Upgrade-boundary backup artifact: `output/playwright/installer-upgrade-backup-2026-05-24.json`
+- Browser workspace smoke artifact: `output/playwright/browser-workspace-smoke-2026-05-24.json`
+- Packaged desktop smoke artifact: `output/playwright/packaged-desktop-smoke-2026-05-24.json`
+- Packaged desktop backup artifact: `output/playwright/packaged-desktop-backup-2026-05-24.json`
 - Packaged relaunch retention fix: `output/playwright/packaged-retention-fixed-2026-05-24.json`
 - Historical compatibility boundary: `output/playwright/cross-version-compatibility-2026-05-24.json`
 
@@ -118,6 +131,6 @@ Batch 1 installer-version upgrade evidence is already recorded in `output/playwr
 Do not close this handoff until all of the following are true:
 
 - Batch 1 installer-version upgrade evidence remains traceable and uncontested
-- the next verification-stack lane is either complete or explicitly handed off with artifact and command ownership
+- the Batch 2 verification-stack contract remains traceable and rerunnable from source control
 - `docs/RELEASE_RC_EVIDENCE_2026-05-23.md` and `docs/NEXT_EXECUTION_PLAN.md` reflect the latest active lane and blocker state
 - public distribution is either still explicitly blocked or fully assigned with documented release infrastructure ownership

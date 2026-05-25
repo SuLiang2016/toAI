@@ -4,21 +4,20 @@ This file tracks the currently approved execution lane. Update it when the team 
 
 ## Current Execution Lane
 
-Batch 2: verification stack upgrade after closing the real installer-version upgrade lane on 2026-05-24.
+Public distribution ownership hold after closing the Batch 2 verification stack upgrade on 2026-05-24.
 
 ## Target Result
 
-- Preserve the completed Batch 1 installer-upgrade evidence and keep it traceable in release docs.
-- Replace the current partly-manual release confidence model with a documented browser and packaged-app smoke contract.
+- Preserve the completed Batch 1 installer-upgrade evidence and the completed Batch 2 smoke-contract evidence.
+- Keep the browser and packaged-app smoke commands in source control as the standing repo verification contract.
 - Keep public distribution explicitly blocked until signing and update prerequisites exist.
 
 ## Work Items
 
 1. Preserve `output/playwright/installer-upgrade-smoke-2026-05-24.json` and `output/playwright/installer-upgrade-backup-2026-05-24.json` as the dated Batch 1 proof for `1.0.0 -> 1.0.1`.
-2. Decide the Batch 2 smoke contract surface for browser flow coverage and packaged/Electron startup coverage.
-3. Update `scripts/verify-upgrade.mjs` and related test entrypoints so the new smoke lane becomes part of the repo contract instead of operator memory.
-4. Document the new verification command sequence in release and planning docs.
-5. Keep public distribution blocked until certificate ownership, timestamping, update metadata hosting, rollback policy, and trust-policy ownership exist.
+2. Preserve `output/playwright/browser-workspace-smoke-2026-05-24.json` and `output/playwright/packaged-desktop-smoke-2026-05-24.json` as the dated Batch 2 proof for the repeatable smoke contract.
+3. Keep `pnpm smoke:browser`, `pnpm smoke:packaged`, and `pnpm verify:release` aligned with `scripts/verify-upgrade.mjs` and the release docs.
+4. Keep public distribution blocked until certificate ownership, timestamping, update metadata hosting, rollback policy, and trust-policy ownership exist, with blocker items 1-5 tracked in `docs/PUBLIC_DISTRIBUTION_OWNERSHIP.md`.
 
 ## Required Verification
 
@@ -29,23 +28,26 @@ pnpm test
 pnpm build
 pnpm electron-build
 pnpm electron-installer
+pnpm smoke:browser
+pnpm smoke:packaged
 ```
 
+- Preferred wrapper: `pnpm verify:release`
 - Batch 1 evidence is already complete in `output/playwright/installer-upgrade-smoke-2026-05-24.json`.
-- Batch 2 should add stable rerunnable smoke commands rather than another one-off operator flow.
+- Batch 2 is complete once the smoke commands above remain rerunnable without reconstructing operator steps.
 
-## Manual Smoke
+## Contract Notes
 
 1. Preserve the completed installer-upgrade artifact set as baseline evidence, not open work.
-2. Add one browser smoke lane that covers key workspace flows under the current app shell.
-3. Add one packaged/Electron smoke lane that covers startup, About, diagnostics, and backup actions.
-4. Record each Batch 2 addition as `freshly rerun`, `deferred`, or `blocked`, with artifact path and owner/prerequisite notes.
+2. Preserve the completed browser smoke artifact at `output/playwright/browser-workspace-smoke-2026-05-24.json`.
+3. Preserve the completed packaged smoke artifacts at `output/playwright/packaged-desktop-smoke-2026-05-24.json` and `output/playwright/packaged-desktop-backup-2026-05-24.json`.
+4. Record each verification rerun as `freshly rerun`, `deferred`, or `blocked`, with artifact path and owner/prerequisite notes.
 
 ## Stop Condition
 
 Stop only when:
 
 - Batch 1 installer-version upgrade evidence remains traceable and uncontested,
-- Batch 2 verification commands are documented in source control and can be rerun without reconstructing operator steps,
-- release docs reflect the new verification contract and no longer describe installer-version upgrade evidence as missing,
+- Batch 2 smoke-contract evidence remains traceable and rerunnable from source control,
+- release docs reflect the new verification contract and the active blocker state,
 - public distribution gates remain explicitly blocked or assigned with owners.

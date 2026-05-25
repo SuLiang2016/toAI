@@ -1,0 +1,21 @@
+{
+  "ranAt": "2026-05-24T13:21:58.517Z",
+  "outputPath": "C:\\suliang\\toAI\\ai-chat\\output\\playwright\\packaged-desktop-smoke-2026-05-24.json",
+  "backupJsonPath": "C:\\suliang\\toAI\\ai-chat\\output\\playwright\\packaged-desktop-backup-2026-05-24.json",
+  "unpackedExecutable": "C:\\suliang\\toAI\\ai-chat\\dist\\win-unpacked\\AI Chat.exe",
+  "originalUserDataPresent": true,
+  "userDataBackupPath": "C:\\Users\\admin\\AppData\\Roaming\\ai-chat.batch2-backup-1779628918518",
+  "aboutDetails": {
+    "versionLine": "Version: 1.0.1Platform: win32Conversation store: localStorageLong-term storage strategy: keep localStorage canonical until a desktop-owned store is justifiedBackup restore mode: replace-onlyLog path: C:\\Users\\admin\\AppData\\Roaming\\ai-chat\\logs\\main.logStartup: ok",
+    "platformLine": "Platform: win32",
+    "logPathLine": "Log path: C:\\Users\\admin\\AppData\\Roaming\\ai-chat\\logs\\main.log",
+    "startupLine": "Startup: ok"
+  },
+  "logExportStatus": "Exported sanitized logs: C:\\Users\\admin\\AppData\\Roaming\\ai-chat\\sanitized-main.log",
+  "backupExportStatus": "Exported backup created at 2026-05-24T13:22:01.891Z.",
+  "restoreStatus": null,
+  "backupFileExists": true,
+  "sanitizedLogPath": "C:\\Users\\admin\\AppData\\Roaming\\ai-chat\\sanitized-main.log",
+  "restoreVerified": true,
+  "restoredOriginalUserData": true
+}

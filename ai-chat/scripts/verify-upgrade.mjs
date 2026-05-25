@@ -17,6 +17,21 @@ assert.equal(
   'node scripts/run-behavior-tests.mjs && node scripts/verify-upgrade.mjs',
   'test script must run behavior tests before contract verification'
 );
+assert.equal(
+  pkg.scripts['smoke:browser'],
+  'node scripts/browser-workspace-smoke.mjs',
+  'browser smoke script must stay wired into package.json'
+);
+assert.equal(
+  pkg.scripts['smoke:packaged'],
+  'node scripts/packaged-desktop-smoke.mjs',
+  'packaged smoke script must stay wired into package.json'
+);
+assert.equal(
+  pkg.scripts['verify:release'],
+  'pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm electron-build && pnpm electron-installer && pnpm smoke:browser && pnpm smoke:packaged',
+  'release verification script must sequence static, packaging, and smoke gates'
+);
 assert.match(pkg.scripts['electron-dev'], /pnpm dev/, 'electron-dev must use pnpm dev');
 assert.match(pkg.scripts['electron-build'], /pnpm build/, 'electron-build must use pnpm build');
 assert.deepEqual(
@@ -49,9 +64,12 @@ assert.ok(existsSync('src/lib/storage.ts'), 'storage schema/migration helper mod
 assert.ok(existsSync('src/lib/chat-client.ts'), 'chat client helper module must exist');
 assert.ok(existsSync('src/app/api/provider/check/route.ts'), 'provider connectivity check route must exist');
 assert.ok(existsSync('scripts/run-behavior-tests.mjs'), 'behavior test runner must exist');
+assert.ok(existsSync('scripts/smoke-helpers.mjs'), 'shared smoke automation helpers must exist');
 assert.ok(existsSync('scripts/streaming.behavior.test.mjs'), 'streaming behavior tests must exist');
 assert.ok(existsSync('scripts/storage.behavior.test.mjs'), 'storage behavior tests must exist');
 assert.ok(existsSync('scripts/provider-config.behavior.test.mjs'), 'provider config behavior tests must exist');
+assert.ok(existsSync('scripts/browser-workspace-smoke.mjs'), 'browser workspace smoke script must exist');
+assert.ok(existsSync('scripts/packaged-desktop-smoke.mjs'), 'packaged desktop smoke script must exist');
 assert.ok(existsSync('src/components/chatbox/ChatSidebar.tsx'), 'chat sidebar boundary must exist');
 assert.ok(existsSync('src/components/chatbox/ProviderPresetsModal.tsx'), 'provider presets modal boundary must exist');
 assert.ok(existsSync('src/components/chatbox/AboutModal.tsx'), 'about modal boundary must exist');
@@ -251,15 +269,48 @@ assert.match(roadmap, /Execution Evidence/, 'roadmap must record execution evide
 assert.match(roadmap, /Phase 1/, 'roadmap must keep phase references');
 assert.match(roadmap, /pnpm lint/, 'roadmap must record verification commands');
 assert.match(roadmap, /pnpm electron-installer/, 'roadmap must record installer verification commands');
+assert.match(roadmap, /pnpm smoke:browser/, 'roadmap must record browser smoke verification');
+assert.match(roadmap, /pnpm smoke:packaged/, 'roadmap must record packaged smoke verification');
+assert.match(roadmap, /pnpm verify:release/, 'roadmap must record the release verification wrapper');
+
+const nextExecutionPlan = text('docs/NEXT_EXECUTION_PLAN.md');
+assert.match(nextExecutionPlan, /Batch 1/, 'next execution plan must preserve Batch 1 evidence');
+assert.match(nextExecutionPlan, /Batch 2/, 'next execution plan must preserve Batch 2 evidence');
+assert.match(nextExecutionPlan, /pnpm smoke:browser/, 'next execution plan must record browser smoke verification');
+assert.match(nextExecutionPlan, /pnpm smoke:packaged/, 'next execution plan must record packaged smoke verification');
+assert.match(nextExecutionPlan, /public distribution/i, 'next execution plan must keep public distribution blockers explicit');
+
+const pendingReleaseHandoff = text('docs/PENDING_RELEASE_HANDOFF_2026-05-24.md');
+assert.match(pendingReleaseHandoff, /pnpm smoke:browser/, 'pending release handoff must record browser smoke verification');
+assert.match(pendingReleaseHandoff, /pnpm smoke:packaged/, 'pending release handoff must record packaged smoke verification');
+assert.match(pendingReleaseHandoff, /pnpm verify:release/, 'pending release handoff must record the release verification wrapper');
+assert.match(pendingReleaseHandoff, /internal-only/i, 'pending release handoff must keep internal-only release state explicit');
+
+const publicDistributionOwnership = text('docs/PUBLIC_DISTRIBUTION_OWNERSHIP.md');
+assert.match(publicDistributionOwnership, /Item 1: Signing Certificate Ownership/, 'public distribution ownership must document item 1');
+assert.match(publicDistributionOwnership, /Item 2: Timestamp Server/, 'public distribution ownership must document item 2');
+assert.match(publicDistributionOwnership, /Update Metadata Hosting/, 'public distribution ownership must document item 3');
+assert.match(publicDistributionOwnership, /Item 4: Rollback Policy/, 'public distribution ownership must document item 4');
+assert.match(publicDistributionOwnership, /Item 5: Trust-Policy Owner/, 'public distribution ownership must document item 5');
+assert.match(publicDistributionOwnership, /BLOCKED/, 'public distribution ownership must keep blockers explicit');
+assert.match(publicDistributionOwnership, /TBD/, 'public distribution ownership must preserve unassigned owners');
+assert.match(publicDistributionOwnership, /Done Criteria/, 'public distribution ownership must define completion conditions');
+assert.match(publicDistributionOwnership, /Repo-Local Stop Condition/, 'public distribution ownership must define the repo-local stop condition');
 
 const releaseChecklist = text('docs/RELEASE_CHECKLIST.md');
 assert.match(releaseChecklist, /internal RC evidence lane/, 'release checklist must frame the lane as internal evidence');
 assert.match(releaseChecklist, /STATIC PASS/, 'release checklist must name the static gate state');
+assert.match(releaseChecklist, /BROWSER SMOKE PASS/, 'release checklist must name the browser smoke gate state');
+assert.match(releaseChecklist, /PACKAGED SMOKE PASS/, 'release checklist must name the packaged smoke gate state');
 assert.match(releaseChecklist, /UNPACKED SMOKE PASS/, 'release checklist must name the unpacked smoke gate state');
 assert.match(releaseChecklist, /INSTALLER SMOKE PASS/, 'release checklist must name the installer smoke gate state');
 assert.match(releaseChecklist, /BLOCKED/, 'release checklist must name blocked gate states');
 assert.match(releaseChecklist, /DEFERRED/, 'release checklist must name deferred gate states');
 assert.match(releaseChecklist, /pnpm electron-installer/, 'release checklist must include installer verification');
+assert.match(releaseChecklist, /pnpm smoke:browser/, 'release checklist must include browser smoke verification');
+assert.match(releaseChecklist, /pnpm smoke:packaged/, 'release checklist must include packaged smoke verification');
+assert.match(releaseChecklist, /pnpm verify:release/, 'release checklist must include the release verification wrapper');
+assert.match(releaseChecklist, /PUBLIC_DISTRIBUTION_OWNERSHIP/, 'release checklist must point to the public distribution ownership contract');
 
 const releaseEvidenceTemplate = text('docs/RELEASE_EVIDENCE_TEMPLATE.md');
 assert.match(releaseEvidenceTemplate, /App version:/, 'release evidence template must capture app version');
@@ -276,9 +327,13 @@ const releaseEvidenceDelta = text('docs/RELEASE_RC_EVIDENCE_2026-05-23.md');
 assert.match(releaseEvidenceDelta, /freshly rerun/i, 'delta release evidence must record freshly rerun entries');
 assert.match(releaseEvidenceDelta, /already evidenced/i, 'delta release evidence must preserve already-evidenced entries');
 assert.match(releaseEvidenceDelta, /DEFERRED/, 'delta release evidence must keep deferred gaps explicit');
+assert.match(releaseEvidenceDelta, /BROWSER SMOKE PASS/, 'delta release evidence must record browser smoke evidence');
+assert.match(releaseEvidenceDelta, /PACKAGED SMOKE PASS/, 'delta release evidence must record packaged smoke evidence');
+assert.match(releaseEvidenceDelta, /PUBLIC_DISTRIBUTION_OWNERSHIP/, 'delta release evidence must point to the public distribution ownership contract');
 
 const optimizationDirections = text('docs/NEXT_OPTIMIZATION_DIRECTIONS.md');
 assert.match(optimizationDirections, /Maintainability/, 'optimization directions must track the maintainability direction');
 assert.match(optimizationDirections, /behavior-level/, 'optimization directions must mention behavior-level verification');
+assert.match(optimizationDirections, /pnpm verify:release/, 'optimization directions must mention the release verification wrapper');
 
 console.log('upgrade verification checks passed');

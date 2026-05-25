@@ -3,7 +3,7 @@
 Date: 2026-05-23
 Last updated: 2026-05-24
 
-This evidence lane preserves the completed 2026-05-20 internal RC baseline, the completed 2026-05-23 roadmap Phase 1-6 batch, and the 2026-05-24 validation follow-up. Earlier dated evidence that was not rerun in the current lane remains already evidenced rather than reopened as backlog. Any unresolved external release prerequisites remain explicit `DEFERRED` or `BLOCKED` gaps instead of implied passes. It does not approve public distribution.
+This evidence lane preserves the completed 2026-05-20 internal RC baseline, the completed 2026-05-23 roadmap Phase 1-6 batch, and the 2026-05-24 validation follow-up plus Batch 2 smoke-contract refresh. Earlier dated evidence that was not rerun in the current lane remains already evidenced rather than reopened as backlog. Any unresolved external release prerequisites remain explicit `DEFERRED` or `BLOCKED` gaps instead of implied passes. It does not approve public distribution.
 
 ## Record 1
 
@@ -108,7 +108,7 @@ This evidence lane preserves the completed 2026-05-20 internal RC baseline, the 
 - Backup file path: `n/a`
 - Evidence mode: `freshly rerun`
 - Gate state: `BLOCKED`
-- Owner / prerequisite note: public distribution remains blocked until certificate ownership, timestamp server, update metadata hosting, rollback policy, and trust-policy ownership are defined
+- Owner / prerequisite note: public distribution remains blocked until certificate ownership, timestamp server, update metadata hosting, rollback policy, and trust-policy ownership are defined; see `docs/PUBLIC_DISTRIBUTION_OWNERSHIP.md`
 
 ## Record 8
 
@@ -124,3 +124,33 @@ This evidence lane preserves the completed 2026-05-20 internal RC baseline, the 
 - Evidence mode: `freshly rerun`
 - Gate state: `INSTALLER UPGRADE PASS`
 - Owner / prerequisite note: this closes the remaining repo-local release-confidence gap for a real installer-version upgrade path; public distribution remains separately blocked by Record 7
+
+## Record 9
+
+- App version: `1.0.1`
+- Artifact path: `C:\suliang\toAI\ai-chat\output\playwright\browser-workspace-smoke-2026-05-24.json`
+- OS/profile: `Windows 10 19045 / admin`
+- Old install state: `Batch 1 installer-version upgrade evidence and static/package gates already closed on 2026-05-24`
+- New install state: `built browser app shell reran through system Chromium CDP automation against pnpm start`
+- Command used: `node scripts/browser-workspace-smoke.mjs`
+- Smoke result: seeded browser workspace state loaded successfully; conversation rename, search filtering, archive-view toggle, and new-chat draft persistence after reload all passed in the current app shell
+- Sanitized log path: `n/a`
+- Backup file path: `n/a`
+- Evidence mode: `freshly rerun`
+- Gate state: `BROWSER SMOKE PASS`
+- Owner / prerequisite note: this is the standing repo-local browser workspace contract behind `pnpm smoke:browser`; it replaces operator-memory browser steps with a rerunnable command
+
+## Record 10
+
+- App version: `1.0.1`
+- Artifact path: `C:\suliang\toAI\ai-chat\output\playwright\packaged-desktop-smoke-2026-05-24.json`, `C:\suliang\toAI\ai-chat\output\playwright\packaged-desktop-backup-2026-05-24.json`
+- OS/profile: `Windows 10 19045 / admin`
+- Old install state: `2026-05-24 unpacked packaging artifacts already rebuilt and installer/upgrade evidence already recorded`
+- New install state: `current unpacked Electron build reran through remote debugging with isolated userData backup and restore`
+- Command used: `node scripts/packaged-desktop-smoke.mjs`
+- Smoke result: unpacked executable launched successfully; About loaded `Version: 1.0.1`, platform, log path, and startup diagnostics; sanitized log export succeeded; backup export status was emitted; restore verification passed from the generated backup JSON; the original userData directory was restored after the run
+- Sanitized log path: `C:\Users\admin\AppData\Roaming\ai-chat\sanitized-main.log`
+- Backup file path: `C:\suliang\toAI\ai-chat\output\playwright\packaged-desktop-backup-2026-05-24.json`
+- Evidence mode: `freshly rerun`
+- Gate state: `PACKAGED SMOKE PASS`
+- Owner / prerequisite note: together with Record 9 and `pnpm verify:release`, this closes the Batch 2 verification-contract lane; installed startup and real installer-version upgrade evidence remain preserved in Records 4 and 8 while public distribution stays blocked by Record 7
